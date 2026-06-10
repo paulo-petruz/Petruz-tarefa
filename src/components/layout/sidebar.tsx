@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  ShieldCheck,
 } from "lucide-react";
 import type { Workspace } from "@/lib/data";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,13 @@ import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "petruz-sidebar-collapsed";
 
-export function Sidebar({ workspaces }: { workspaces: Workspace[] }) {
+export function Sidebar({
+  workspaces,
+  isSuperAdmin = false,
+}: {
+  workspaces: Workspace[];
+  isSuperAdmin?: boolean;
+}) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -89,6 +96,19 @@ export function Sidebar({ workspaces }: { workspaces: Workspace[] }) {
           <Folder className="h-4 w-4 shrink-0" />
           {!collapsed && "Espaços de trabalho"}
         </Link>
+        {isSuperAdmin && (
+          <Link
+            href="/admin"
+            title="Administração"
+            className={cn(
+              "flex items-center gap-3 rounded-md text-sm font-medium hover:bg-sidebar-accent",
+              collapsed ? "justify-center p-2.5" : "px-3 py-2"
+            )}
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            {!collapsed && "Administração"}
+          </Link>
+        )}
 
         {!collapsed && (
           <p className="mt-4 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50">

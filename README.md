@@ -67,6 +67,19 @@ Para produção: `npm run build && npm start`.
   espaço com barras de progresso.
 - **Tema**: claro/escuro (toggle na barra superior), paleta açaí.
 
+## Super admin e reset de senha
+
+Promova um usuário a **super admin** direto no banco:
+
+```sql
+UPDATE dbo.Users SET Role = 'superadmin' WHERE Email = 'email@exemplo.com';
+```
+
+O usuário promovido passa a ver o item **Administração** no menu (vale na
+hora, sem novo login — o papel é lido do banco a cada acesso). Na página
+`/admin` ele vê todos os usuários e pode **resetar a senha** de qualquer um
+(com gerador de senha aleatória); a nova senha é hasheada com bcrypt.
+
 ## Estrutura do banco (criada automaticamente)
 
 | Tabela | Descrição |

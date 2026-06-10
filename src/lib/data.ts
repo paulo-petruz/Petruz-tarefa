@@ -85,6 +85,46 @@ export async function createUser(
   return result.recordset[0];
 }
 
+export interface UserSummary {
+  Id: number;
+  Name: string;
+  Email: string;
+  Role: string;
+  CreatedAt: Date;
+}
+
+/** Papel global atual direto do banco (não confia no token da sessão). */
+export async function getUserRole(userId: number): Promise<string | null> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("id", sql.Int, userId)
+    .query("SELECT Role FROM dbo.Users WHERE Id = @id");
+  return result.recordset[0]?.Role ?? null;
+}
+
+export async function listAllUsers(): Promise<UserSummary[]> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .query(
+      "SELECT Id, Name, Email, Role, CreatedAt FROM dbo.Users ORDER BY Name"
+    );
+  return result.recordset;
+}
+
+export async function updateUserPassword(
+  userId: number,
+  passwordHash: string
+): Promise<void> {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input("id", sql.Int, userId)
+    .input("hash", sql.NVarChar(255), passwordHash)
+    .query("UPDATE dbo.Users SET PasswordHash = @hash WHERE Id = @id");
+}
+
 // ---------- Workspaces ----------
 
 export async function listWorkspacesForUser(

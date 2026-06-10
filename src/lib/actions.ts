@@ -11,6 +11,7 @@ import {
 } from "./auth";
 import {
   assertCanEditTask,
+  assertSuperAdmin,
   assertWorkspaceAdmin,
   getWorkspaceRole,
   requireUser,
@@ -101,6 +102,37 @@ export async function loginAction(
 export async function logoutAction(): Promise<void> {
   destroySession();
   redirect("/login");
+}
+
+// ---------- Administração (super admin) ----------
+
+const resetPasswordSchema = z.object({
+  userId: z.coerce.number().int().positive(),
+  password: z.string().min(8, "A nova senha deve ter no mínimo 8 caracteres."),
+});
+
+export async function resetPasswordAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireUser();
+  const parsed = resetPasswordSchema.safeParse({
+    userId: formData.get("userId"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) };
+
+  try {
+    await assertSuperAdmin(user);
+    const hash = await hashPassword(parsed.data.password);
+    await data.updateUserPassword(parsed.data.userId, hash);
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Erro ao resetar a senha.",
+    };
+  }
+  revalidatePath("/admin");
+  return { success: true };
 }
 
 // ---------- Workspaces ----------

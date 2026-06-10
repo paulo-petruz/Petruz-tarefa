@@ -19,6 +19,32 @@ export async function requireUser(): Promise<SessionUser> {
   return session;
 }
 
+export const SUPER_ADMIN_ROLE = "superadmin";
+
+/** Papel global lido do banco — promoções via SQL valem na hora. */
+export async function isSuperAdmin(userId: number): Promise<boolean> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("id", sql.Int, userId)
+    .query("SELECT Role FROM dbo.Users WHERE Id = @id");
+  return result.recordset[0]?.Role === SUPER_ADMIN_ROLE;
+}
+
+/** Para páginas: redireciona quem não é super admin. */
+export async function requireSuperAdmin(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!(await isSuperAdmin(user.id))) redirect("/dashboard");
+  return user;
+}
+
+/** Para actions: lança erro se não for super admin. */
+export async function assertSuperAdmin(user: SessionUser): Promise<void> {
+  if (!(await isSuperAdmin(user.id))) {
+    throw new Error("Apenas super admins podem executar esta ação.");
+  }
+}
+
 export type WorkspaceRole = "admin" | "member";
 
 export async function getWorkspaceRole(
