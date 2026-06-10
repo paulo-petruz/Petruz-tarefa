@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Petruz Tasks
 
-## Getting Started
+Gerenciador de tarefas da empresa Petruz — um "ClickUp simplificado" com
+espaços de trabalho, tarefas com status/responsável/prazos, alertas de
+vencimento e painel geral de andamento.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Next.js 14** (App Router) + **TypeScript** + **Node.js**
+- **shadcn/ui** + Tailwind CSS — temas **claro e escuro** em tons de açaí (roxo)
+- **SQL Server** (servidor existente) — as tabelas são **criadas
+  automaticamente** na primeira conexão
+- Autenticação própria: senhas com hash **bcrypt** e sessão em cookie
+  **JWT (httpOnly)**
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Como rodar
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Copie `.env.example` para `.env.local` e ajuste a conexão com o seu
+   SQL Server (o banco informado em `DB_NAME` precisa existir; as tabelas
+   são inicializadas pelo sistema). Gere um `AUTH_SECRET` próprio:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   openssl rand -hex 32
+   ```
 
-## Learn More
+2. Instale e suba o servidor de desenvolvimento:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Acesse <http://localhost:3000>, crie sua conta em **Cadastre-se** e
+   comece criando um **espaço de trabalho**.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Para produção: `npm run build && npm start`.
 
-## Deploy on Vercel
+## Funcionalidades
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Usuários**: cadastro com e-mail + senha hasheada (bcrypt, custo 12);
+  sessão JWT assinada (HS256) em cookie httpOnly; middleware protege todas
+  as rotas do app.
+- **Autorização**: acesso a um espaço restrito aos seus membros; gestão
+  (membros/exclusão) restrita a admins do espaço; o dono entra como admin.
+  **Edição/exclusão de tarefa e subtarefas** restritas ao **responsável**
+  (admins do espaço editam tudo; tarefas sem responsável: quem criou).
+  Os demais membros veem tudo em modo somente leitura.
+- **Espaços de trabalho**: criação com cor e descrição; convite de membros
+  pelo e-mail cadastrado; papéis admin/membro.
+- **Tarefas**: título, descrição, status (A Fazer, Em Andamento, Em Revisão,
+  Concluída), prioridade, responsável, data de início e vencimento; edição,
+  exclusão e mudança rápida de status; visualização em **lista**, **quadro**
+  e **por pessoa** — cada membro do espaço tem uma "pasta" com contadores
+  por status e % médio; clicar na pasta abre a página da pessoa com apenas
+  as tarefas dela (visão padrão).
+- **Painel por workspace**: a rota Painel mostra um cartão por espaço com
+  contagens por status, barra de andamento e alertas de vencimento do espaço.
+- **Progresso**: % de conclusão por tarefa — digitado manualmente (inline ou
+  no diálogo) ou calculado automaticamente pelas subtarefas quando existem;
+  tarefas concluídas contam como 100%.
+- **Subtarefas**: checklist dentro de cada tarefa.
+- **Acompanhamento**: cartões por status (A Fazer, Em Andamento, Em Revisão,
+  Concluída) e barra de andamento geral no topo de cada espaço.
+- **Alertas de vencimento**: badges "Vencida / Vence hoje / Vence amanhã"
+  nas tarefas e seção de alertas no painel (vencidas + próximos 3 dias).
+- **Painel**: totais por status, alertas de vencimento e andamento por
+  espaço com barras de progresso.
+- **Tema**: claro/escuro (toggle na barra superior), paleta açaí.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Estrutura do banco (criada automaticamente)
+
+| Tabela | Descrição |
+| --- | --- |
+| `Users` | usuários com e-mail único e hash de senha |
+| `Workspaces` | espaços de trabalho (nome, cor, dono) |
+| `WorkspaceMembers` | membros por espaço com papel `admin`/`member` |
+| `Tasks` | tarefas com status, prioridade, responsável e prazos |
+| `Subtasks` | subtarefas (checklist) de cada tarefa, base do % de conclusão |
