@@ -12,7 +12,7 @@ import {
 import {
   assertCanEditTask,
   assertWorkspaceAdmin,
-  assertWorkspaceMember,
+  getWorkspaceRole,
   requireUser,
 } from "./authz";
 import * as data from "./data";
@@ -265,7 +265,20 @@ export async function createTaskAction(
   if (!parsed.success) return { error: firstError(parsed.error) };
 
   try {
-    await assertWorkspaceMember(parsed.data.workspaceId, user);
+    const role = await getWorkspaceRole(parsed.data.workspaceId, user.id);
+    if (!role) {
+      return { error: "Você não tem acesso a este espaço de trabalho." };
+    }
+    // Membros comuns só criam tarefas para si mesmos (ou sem responsável).
+    if (
+      role !== "admin" &&
+      parsed.data.assigneeId !== undefined &&
+      parsed.data.assigneeId !== user.id
+    ) {
+      return {
+        error: "Apenas admins podem criar tarefas para outra pessoa.",
+      };
+    }
     await data.createTask(
       {
         workspaceId: parsed.data.workspaceId,
@@ -303,6 +316,18 @@ export async function updateTaskAction(
     const task = await data.getTask(taskId);
     if (!task) return { error: "Tarefa não encontrada." };
     await assertCanEditTask(task, user);
+    // Membros comuns não podem transferir a tarefa para outra pessoa.
+    const role = await getWorkspaceRole(task.WorkspaceId, user.id);
+    if (
+      role !== "admin" &&
+      parsed.data.assigneeId !== undefined &&
+      parsed.data.assigneeId !== user.id &&
+      parsed.data.assigneeId !== task.AssigneeId
+    ) {
+      return {
+        error: "Apenas admins podem atribuir tarefas a outra pessoa.",
+      };
+    }
     await data.updateTask(taskId, {
       workspaceId: task.WorkspaceId,
       title: parsed.data.title,

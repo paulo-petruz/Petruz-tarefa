@@ -48,10 +48,14 @@ export function TaskByPerson({
   tasks,
   members,
   workspaceId,
+  currentUserId,
+  isAdmin,
 }: {
   tasks: Task[];
   members: WorkspaceMember[];
   workspaceId: number;
+  currentUserId: number;
+  isAdmin: boolean;
   subtasksByTask?: Record<number, Subtask[]>;
 }) {
   const groups: PersonGroup[] = members.map((member) => ({
@@ -155,11 +159,14 @@ export function TaskByPerson({
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </Link>
 
-            {group.userId !== null && (
+            {group.userId !== null &&
+              (isAdmin || group.userId === currentUserId) && (
               <TaskDialog
                 workspaceId={workspaceId}
                 members={members}
                 defaultAssigneeId={group.userId}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
                 trigger={
                   <Button
                     variant="ghost"

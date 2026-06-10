@@ -66,6 +66,8 @@ export function TaskDialog({
   task,
   subtasks,
   defaultAssigneeId,
+  currentUserId,
+  isAdmin,
   trigger,
 }: {
   workspaceId: number;
@@ -73,8 +75,17 @@ export function TaskDialog({
   task?: TaskFormValues;
   subtasks?: Subtask[];
   defaultAssigneeId?: number;
+  currentUserId: number;
+  isAdmin: boolean;
   trigger: ReactNode;
 }) {
+  // Membros comuns só podem atribuir tarefas a si mesmos; mantém o
+  // responsável atual visível em modo edição.
+  const selectableMembers = isAdmin
+    ? members
+    : members.filter(
+        (m) => m.UserId === currentUserId || m.UserId === task?.assigneeId
+      );
   const [open, setOpen] = useState(false);
   const action = task
     ? updateTaskAction.bind(null, task.id)
@@ -175,7 +186,7 @@ export function TaskDialog({
                 <SelectValue placeholder="Sem responsável" />
               </SelectTrigger>
               <SelectContent>
-                {members.map((m) => (
+                {selectableMembers.map((m) => (
                   <SelectItem key={m.UserId} value={String(m.UserId)}>
                     {m.Name}
                   </SelectItem>

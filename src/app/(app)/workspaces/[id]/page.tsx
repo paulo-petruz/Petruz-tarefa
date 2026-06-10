@@ -81,6 +81,8 @@ export default async function WorkspacePage({
           <TaskDialog
             workspaceId={workspaceId}
             members={members}
+            currentUserId={user.id}
+            isAdmin={isAdmin}
             trigger={
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -104,6 +106,8 @@ export default async function WorkspacePage({
             tasks={tasks}
             members={members}
             workspaceId={workspaceId}
+            currentUserId={user.id}
+            isAdmin={isAdmin}
           />
         </TabsContent>
         <TabsContent value="list" className="mt-4">

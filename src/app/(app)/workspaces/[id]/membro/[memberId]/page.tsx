@@ -103,17 +103,21 @@ export default async function MemberFolderPage({
             </p>
           </div>
         </div>
-        <TaskDialog
-          workspaceId={workspaceId}
-          members={members}
-          defaultAssigneeId={member?.UserId}
-          trigger={
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nova tarefa
-            </Button>
-          }
-        />
+        {(role === "admin" || !member || member.UserId === user.id) && (
+          <TaskDialog
+            workspaceId={workspaceId}
+            members={members}
+            defaultAssigneeId={member?.UserId}
+            currentUserId={user.id}
+            isAdmin={role === "admin"}
+            trigger={
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Nova tarefa
+              </Button>
+            }
+          />
+        )}
       </div>
 
       <StatusSummary tasks={tasks} />

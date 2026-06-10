@@ -65,6 +65,8 @@ export function TaskBoard({
                               members={members}
                               task={toFormValues(task)}
                               subtasks={subtasksByTask[task.Id] ?? []}
+                              currentUserId={currentUserId}
+                              isAdmin={isAdmin}
                               trigger={
                                 <Button
                                   variant="ghost"
