@@ -46,7 +46,10 @@ export async function createSession(user: SessionUser): Promise<void> {
 
   cookies().set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Cookies "Secure" são descartados pelo navegador em conexões HTTP.
+    // Como o deploy pode rodar em rede interna sem HTTPS, a flag só é
+    // ativada explicitamente via COOKIE_SECURE=true (recomendado com HTTPS).
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     maxAge: SESSION_DURATION_SECONDS,
     path: "/",
