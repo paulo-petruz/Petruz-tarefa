@@ -13,7 +13,7 @@ import { TaskDeleteButton } from "./task-delete-button";
 import { TaskDialog } from "./task-dialog";
 import { taskPercent } from "./task-progress";
 import { TaskStatusSelect } from "./task-status-select";
-import { toFormValues } from "./task-table";
+import { toFormValues } from "./task-utils";
 
 export function TaskBoard({
   tasks,

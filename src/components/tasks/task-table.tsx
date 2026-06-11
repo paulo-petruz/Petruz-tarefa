@@ -3,8 +3,9 @@
 import { Fragment, useState } from "react";
 import { CheckCircle2, ChevronRight, Circle, Pencil } from "lucide-react";
 import type { Subtask, Task, WorkspaceMember } from "@/lib/data";
-import { formatDate, toISODate } from "@/lib/dates";
+import { formatDate } from "@/lib/dates";
 import { canEditTask } from "@/lib/permissions";
+import { initials, toFormValues } from "./task-utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,33 +22,10 @@ import { PriorityBadge } from "./priority-badge";
 import { StatusBadge } from "./status-badge";
 import { SubtaskList } from "./subtask-list";
 import { TaskDeleteButton } from "./task-delete-button";
-import { TaskDialog, type TaskFormValues } from "./task-dialog";
+import { TaskDialog } from "./task-dialog";
 import { TaskProgress } from "./task-progress";
 import { TaskProgressEditor } from "./task-progress-editor";
 import { TaskStatusSelect } from "./task-status-select";
-
-export function toFormValues(task: Task): TaskFormValues {
-  return {
-    id: task.Id,
-    title: task.Title,
-    description: task.Description,
-    status: task.Status,
-    priority: task.Priority,
-    assigneeId: task.AssigneeId,
-    startDate: toISODate(task.StartDate),
-    dueDate: toISODate(task.DueDate),
-    progress: task.Progress,
-  };
-}
-
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
 
 const COLUMN_COUNT = 6;
 
