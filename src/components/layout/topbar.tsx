@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, LogOut } from "lucide-react";
 import { logoutAction } from "@/lib/actions";
 import type { SessionUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -33,6 +34,12 @@ export function Topbar({ user }: { user: SessionUser }) {
             <p className="text-xs text-muted-foreground">{user.email}</p>
           </div>
         </div>
+        <Button variant="ghost" size="icon" asChild title="Minha conta">
+          <Link href="/conta">
+            <KeyRound className="h-4 w-4" />
+            <span className="sr-only">Minha conta</span>
+          </Link>
+        </Button>
         <form action={logoutAction}>
           <Button variant="ghost" size="icon" title="Sair" type="submit">
             <LogOut className="h-4 w-4" />

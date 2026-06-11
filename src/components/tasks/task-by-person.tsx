@@ -1,10 +1,8 @@
 import Link from "next/link";
 import {
   CheckCircle2,
-  ChevronRight,
   Circle,
   Eye,
-  Folder,
   LoaderCircle,
   Plus,
   UserRound,
@@ -27,10 +25,10 @@ function initials(name: string): string {
 }
 
 export const STATUS_CHIPS = [
-  { value: "todo", label: "A Fazer", icon: Circle, className: "text-slate-500 dark:text-slate-400" },
-  { value: "in_progress", label: "Em Andamento", icon: LoaderCircle, className: "text-blue-600 dark:text-blue-400" },
-  { value: "review", label: "Em Revisão", icon: Eye, className: "text-purple-600 dark:text-purple-400" },
-  { value: "done", label: "Concluídas", icon: CheckCircle2, className: "text-green-600 dark:text-green-400" },
+  { value: "todo", label: "A Fazer", icon: Circle, className: "text-slate-600 dark:text-slate-300", chipBg: "bg-slate-500/10" },
+  { value: "in_progress", label: "Em Andamento", icon: LoaderCircle, className: "text-blue-600 dark:text-blue-400", chipBg: "bg-blue-500/10" },
+  { value: "review", label: "Em Revisão", icon: Eye, className: "text-purple-600 dark:text-purple-400", chipBg: "bg-purple-500/10" },
+  { value: "done", label: "Concluídas", icon: CheckCircle2, className: "text-green-600 dark:text-green-400", chipBg: "bg-green-500/10" },
 ] as const;
 
 interface PersonGroup {
@@ -41,7 +39,7 @@ interface PersonGroup {
 }
 
 /**
- * Pastas por membro: clicar na pasta abre a página da pessoa
+ * Pastas por membro em grade: clicar no card abre a página da pessoa
  * com apenas as tarefas dela.
  */
 export function TaskByPerson({
@@ -75,7 +73,7 @@ export function TaskByPerson({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {groups.map((group) => {
         const total = group.tasks.length;
         // Média do % das tarefas: reflete progresso parcial, não só concluídas.
@@ -90,94 +88,109 @@ export function TaskByPerson({
                 ) / total
               )
             : 0;
-        const href = `/workspaces/${workspaceId}/membro/${group.userId ?? 0}`;
+        const isOwn = group.userId === currentUserId;
+        const canQuickCreate =
+          group.userId !== null && (isAdmin || isOwn);
 
         return (
           <div
             key={group.key}
-            className="flex items-center gap-2 rounded-lg border bg-card pr-2 transition hover:border-primary/60 hover:shadow-sm"
+            className="group relative rounded-xl border bg-card transition hover:border-primary/50 hover:shadow-md"
           >
             <Link
-              href={href}
-              className="flex min-w-0 flex-1 flex-wrap items-center gap-3 px-4 py-3"
+              href={`/workspaces/${workspaceId}/membro/${group.userId ?? 0}`}
+              className="block space-y-4 p-5"
             >
-              <Folder className="h-5 w-5 shrink-0 text-primary" />
-              <Avatar className="h-8 w-8">
-                <AvatarFallback
-                  className={
-                    group.name
-                      ? "bg-primary text-primary-foreground text-xs"
-                      : "bg-muted text-muted-foreground"
-                  }
-                >
-                  {group.name ? (
-                    initials(group.name)
-                  ) : (
-                    <UserRound className="h-4 w-4" />
-                  )}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium leading-tight">
-                  {group.name ?? "Sem responsável"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {total === 0
-                    ? "Nenhuma tarefa atribuída"
-                    : `${total} tarefa${total > 1 ? "s" : ""} — clique para abrir a pasta`}
-                </p>
+              <div className="flex items-center gap-3">
+                <Avatar className="h-12 w-12 ring-2 ring-primary/15">
+                  <AvatarFallback
+                    className={
+                      group.name
+                        ? "bg-primary text-primary-foreground text-sm font-semibold"
+                        : "bg-muted text-muted-foreground"
+                    }
+                  >
+                    {group.name ? (
+                      initials(group.name)
+                    ) : (
+                      <UserRound className="h-5 w-5" />
+                    )}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold leading-tight">
+                    {group.name ?? "Sem responsável"}
+                    {isOwn && (
+                      <span className="ml-1.5 text-xs font-normal text-primary">
+                        (você)
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {total === 0
+                      ? "Nenhuma tarefa"
+                      : `${total} tarefa${total > 1 ? "s" : ""}`}
+                  </p>
+                </div>
               </div>
 
-              <div className="hidden items-center gap-3 md:flex">
+              <div className="flex flex-wrap gap-1.5">
                 {STATUS_CHIPS.map((chip) => {
                   const count = group.tasks.filter(
                     (t) => t.Status === chip.value
                   ).length;
+                  if (count === 0) return null;
                   const Icon = chip.icon;
                   return (
                     <span
                       key={chip.value}
-                      className={cn(
-                        "flex items-center gap-1 text-xs",
-                        count > 0 ? chip.className : "text-muted-foreground/40"
-                      )}
                       title={chip.label}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                        chip.chipBg,
+                        chip.className
+                      )}
                     >
-                      <Icon className="h-3.5 w-3.5" />
+                      <Icon className="h-3 w-3" />
                       {count}
                     </span>
                   );
                 })}
+                {total === 0 && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    Pasta vazia
+                  </span>
+                )}
               </div>
 
-              <div className="flex w-36 items-center gap-2">
-                <Progress value={percent} className="h-2" />
+              <div className="flex items-center gap-2">
+                <Progress value={percent} className="h-1.5" />
                 <span className="text-xs font-semibold text-muted-foreground">
                   {percent}%
                 </span>
               </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </Link>
 
-            {group.userId !== null &&
-              (isAdmin || group.userId === currentUserId) && (
-              <TaskDialog
-                workspaceId={workspaceId}
-                members={members}
-                defaultAssigneeId={group.userId}
-                currentUserId={currentUserId}
-                isAdmin={isAdmin}
-                trigger={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground"
-                    title={`Nova tarefa para ${group.name}`}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                }
-              />
+            {canQuickCreate && (
+              <div className="absolute right-3 top-3">
+                <TaskDialog
+                  workspaceId={workspaceId}
+                  members={members}
+                  defaultAssigneeId={group.userId ?? undefined}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100"
+                      title={`Nova tarefa para ${group.name}`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  }
+                />
+              </div>
             )}
           </div>
         );

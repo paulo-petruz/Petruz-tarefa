@@ -103,14 +103,27 @@ export async function getUserRole(userId: number): Promise<string | null> {
   return result.recordset[0]?.Role ?? null;
 }
 
-export async function listAllUsers(): Promise<UserSummary[]> {
+export async function listAllUsers(query?: string): Promise<UserSummary[]> {
+  const pool = await getPool();
+  const request = pool.request();
+  let where = "";
+  if (query?.trim()) {
+    request.input("q", sql.NVarChar(255), `%${query.trim()}%`);
+    where = "WHERE Name LIKE @q OR Email LIKE @q";
+  }
+  const result = await request.query(
+    `SELECT Id, Name, Email, Role, CreatedAt FROM dbo.Users ${where} ORDER BY Name`
+  );
+  return result.recordset;
+}
+
+export async function getUserById(id: number): Promise<UserRecord | null> {
   const pool = await getPool();
   const result = await pool
     .request()
-    .query(
-      "SELECT Id, Name, Email, Role, CreatedAt FROM dbo.Users ORDER BY Name"
-    );
-  return result.recordset;
+    .input("id", sql.Int, id)
+    .query("SELECT * FROM dbo.Users WHERE Id = @id");
+  return result.recordset[0] ?? null;
 }
 
 export async function updateUserPassword(

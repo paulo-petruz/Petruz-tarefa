@@ -104,6 +104,44 @@ export async function logoutAction(): Promise<void> {
   redirect("/login");
 }
 
+// ---------- Conta (troca da própria senha) ----------
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Informe sua senha atual."),
+  newPassword: z
+    .string()
+    .min(8, "A nova senha deve ter no mínimo 8 caracteres."),
+});
+
+export async function changeOwnPasswordAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireUser();
+  const parsed = changePasswordSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    newPassword: formData.get("newPassword"),
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) };
+
+  try {
+    const record = await data.getUserById(user.id);
+    if (
+      !record ||
+      !(await verifyPassword(parsed.data.currentPassword, record.PasswordHash))
+    ) {
+      return { error: "Senha atual incorreta." };
+    }
+    const hash = await hashPassword(parsed.data.newPassword);
+    await data.updateUserPassword(user.id, hash);
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Erro ao trocar a senha.",
+    };
+  }
+  return { success: true };
+}
+
 // ---------- Administração (super admin) ----------
 
 const resetPasswordSchema = z.object({

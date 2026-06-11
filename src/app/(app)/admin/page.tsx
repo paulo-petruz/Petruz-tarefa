@@ -1,8 +1,11 @@
-import { ShieldCheck } from "lucide-react";
+import { Search, ShieldCheck, X } from "lucide-react";
+import Link from "next/link";
 import { requireSuperAdmin, SUPER_ADMIN_ROLE } from "@/lib/authz";
 import { listAllUsers } from "@/lib/data";
 import { formatDate } from "@/lib/dates";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -15,9 +18,14 @@ import { ResetPasswordDialog } from "@/components/admin/reset-password-dialog";
 
 export const metadata = { title: "Administração — Petruz Tasks" };
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: { q?: string };
+}) {
   const admin = await requireSuperAdmin();
-  const users = await listAllUsers();
+  const query = searchParams.q?.trim() ?? "";
+  const users = await listAllUsers(query);
 
   return (
     <div className="space-y-6">
@@ -32,6 +40,33 @@ export default async function AdminPage() {
         </p>
       </div>
 
+      <form method="GET" className="flex max-w-md items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            name="q"
+            defaultValue={query}
+            placeholder="Buscar por nome ou e-mail..."
+            className="pl-9"
+          />
+        </div>
+        <Button type="submit" variant="secondary">
+          Buscar
+        </Button>
+        {query && (
+          <Button variant="ghost" size="icon" asChild title="Limpar busca">
+            <Link href="/admin">
+              <X className="h-4 w-4" />
+            </Link>
+          </Button>
+        )}
+      </form>
+
+      {users.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
+          Nenhum usuário encontrado para “{query}”.
+        </div>
+      ) : (
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
@@ -77,6 +112,7 @@ export default async function AdminPage() {
           </TableBody>
         </Table>
       </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         Para promover alguém a super admin, execute no banco de dados:{" "}
