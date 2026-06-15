@@ -13,7 +13,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { DueBadge } from "@/components/tasks/due-badge";
-import { STATUS_CHIPS } from "@/components/tasks/task-by-person";
+import { STATUS_CHIPS } from "@/components/tasks/task-utils";
 import { formatDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 

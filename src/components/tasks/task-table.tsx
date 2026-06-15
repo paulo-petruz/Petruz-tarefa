@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 import { CheckCircle2, ChevronRight, Circle, Pencil } from "lucide-react";
 import type { Subtask, Task, WorkspaceMember } from "@/lib/data";
+import { TASK_STATUSES } from "@/lib/constants";
 import { formatDate } from "@/lib/dates";
 import { canEditTask } from "@/lib/permissions";
 import { initials, toFormValues } from "./task-utils";
@@ -45,6 +46,7 @@ export function TaskTable({
   isAdmin: boolean;
 }) {
   const [expanded, setExpanded] = useState<number[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   function toggleExpanded(taskId: number) {
     setExpanded((prev) =>
@@ -62,8 +64,51 @@ export function TaskTable({
     );
   }
 
+  const filteredTasks =
+    statusFilter === "all"
+      ? tasks
+      : tasks.filter((t) => t.Status === statusFilter);
+
+  const filterOptions = [
+    { value: "all", label: "Todas", count: tasks.length },
+    ...TASK_STATUSES.map((s) => ({
+      value: s.value,
+      label: s.label,
+      count: tasks.filter((t) => t.Status === s.value).length,
+    })),
+  ];
+
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {filterOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setStatusFilter(option.value)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              statusFilter === option.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:bg-muted"
+            )}
+          >
+            {option.label}
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[10px]",
+                statusFilter === option.value
+                  ? "bg-primary-foreground/20"
+                  : "bg-muted"
+              )}
+            >
+              {option.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border bg-card">
       <Table>
         <TableHeader>
           <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
@@ -86,7 +131,7 @@ export function TaskTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tasks.map((task) => {
+          {filteredTasks.map((task) => {
             const editable = canEditTask(task, currentUserId, isAdmin);
             const subtasks = subtasksByTask[task.Id] ?? [];
             const hasSubtasks = subtasks.length > 0;
@@ -99,8 +144,8 @@ export function TaskTable({
                     isOpen ? "border-0 bg-muted/20" : "last:border-0"
                   )}
                 >
-                  <TableCell className="max-w-[300px] py-3">
-                    <div className="flex items-center gap-1.5">
+                  <TableCell className="min-w-[260px] py-3 align-top">
+                    <div className="flex items-start gap-1.5">
                       {hasSubtasks ? (
                         <button
                           type="button"
@@ -110,7 +155,7 @@ export function TaskTable({
                               ? "Recolher subtarefas"
                               : "Expandir subtarefas"
                           }
-                          className="flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                          className="mt-0.5 flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
                           <ChevronRight
                             className={cn(
@@ -124,14 +169,20 @@ export function TaskTable({
                       ) : (
                         <span className="w-5 shrink-0" />
                       )}
-                      <p className="truncate font-medium">{task.Title}</p>
-                      <PriorityBadge priority={task.Priority} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-medium leading-snug">
+                            {task.Title}
+                          </span>
+                          <PriorityBadge priority={task.Priority} />
+                        </div>
+                        {task.Description && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {task.Description}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    {task.Description && (
-                      <p className="ml-6 mt-0.5 truncate text-xs text-muted-foreground">
-                        {task.Description}
-                      </p>
-                    )}
                   </TableCell>
                   <TableCell className="py-3">
                     {editable ? (
@@ -257,6 +308,12 @@ export function TaskTable({
           })}
         </TableBody>
       </Table>
+        {filteredTasks.length === 0 && (
+          <p className="p-8 text-center text-sm text-muted-foreground">
+            Nenhuma tarefa com este status.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
