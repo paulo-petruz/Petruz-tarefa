@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { CalendarClock, CalendarPlus, Pencil } from "lucide-react";
 import { TASK_STATUSES } from "@/lib/constants";
 import type { Subtask, Task, WorkspaceMember } from "@/lib/data";
 import { formatDate } from "@/lib/dates";
@@ -97,9 +97,28 @@ export function TaskBoard({
                             ` (${task.SubtaskDone}/${task.SubtaskCount})`}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{task.AssigneeName ?? "Sem responsável"}</span>
-                        <span>{formatDate(task.DueDate)}</span>
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <div>{task.AssigneeName ?? "Sem responsável"}</div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {task.StartDate && (
+                            <span
+                              className="flex items-center gap-1"
+                              title="Início"
+                            >
+                              <CalendarPlus className="h-3 w-3" />
+                              {formatDate(task.StartDate)}
+                            </span>
+                          )}
+                          {task.DueDate && (
+                            <span
+                              className="flex items-center gap-1"
+                              title="Vencimento"
+                            >
+                              <CalendarClock className="h-3 w-3" />
+                              {formatDate(task.DueDate)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {editable ? (
                         <TaskStatusSelect

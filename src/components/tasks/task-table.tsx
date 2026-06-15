@@ -28,7 +28,7 @@ import { TaskProgress } from "./task-progress";
 import { TaskProgressEditor } from "./task-progress-editor";
 import { TaskStatusSelect } from "./task-status-select";
 
-const COLUMN_COUNT = 6;
+const COLUMN_COUNT = 7;
 
 export function TaskTable({
   tasks,
@@ -108,26 +108,29 @@ export function TaskTable({
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div>
       <Table>
         <TableHeader>
-          <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <TableRow className="border-b border-border hover:bg-transparent">
+            <TableHead className="w-full text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Tarefa
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Status
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Progresso
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Responsável
             </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Início
+            </TableHead>
+            <TableHead className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Vencimento
             </TableHead>
-            <TableHead className="w-[90px]" />
+            <TableHead className="w-[80px]" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -226,15 +229,13 @@ export function TaskTable({
                     )}
                   </TableCell>
                   <TableCell className="py-3">
+                    <span className="text-sm text-muted-foreground">
+                      {formatDate(task.StartDate)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-3">
                     <div className="flex items-center gap-2">
-                      <span
-                        className="text-sm text-muted-foreground"
-                        title={
-                          task.StartDate
-                            ? `Início: ${formatDate(task.StartDate)}`
-                            : undefined
-                        }
-                      >
+                      <span className="text-sm text-muted-foreground">
                         {formatDate(task.DueDate)}
                       </span>
                       <DueBadge dueDate={task.DueDate} status={task.Status} />
