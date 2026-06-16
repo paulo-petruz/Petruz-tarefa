@@ -68,12 +68,17 @@ export function TaskTable({
   const isOverdue = (t: Task) =>
     getDueInfo(t.DueDate, t.Status)?.state === "overdue";
 
-  const filteredTasks =
+  // Ordena por criação mais recente primeiro (ID decrescente), em todos os
+  // estados — a tarefa adicionada por último aparece no topo.
+  const sortTasks = (list: Task[]) => [...list].sort((a, b) => b.Id - a.Id);
+
+  const filteredTasks = sortTasks(
     statusFilter === "all"
       ? tasks
       : statusFilter === "overdue"
         ? tasks.filter(isOverdue)
-        : tasks.filter((t) => t.Status === statusFilter);
+        : tasks.filter((t) => t.Status === statusFilter)
+  );
 
   const overdueCount = tasks.filter(isOverdue).length;
 
