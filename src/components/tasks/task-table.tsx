@@ -4,7 +4,8 @@ import { Fragment, useState } from "react";
 import { CheckCircle2, ChevronRight, Circle, Pencil } from "lucide-react";
 import type { Subtask, Task, WorkspaceMember } from "@/lib/data";
 import { TASK_STATUSES } from "@/lib/constants";
-import { formatDate } from "@/lib/dates";
+import { formatDate, getDueInfo } from "@/lib/dates";
+import { AlertTriangle } from "lucide-react";
 import { canEditTask } from "@/lib/permissions";
 import { initials, toFormValues } from "./task-utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -64,10 +65,17 @@ export function TaskTable({
     );
   }
 
+  const isOverdue = (t: Task) =>
+    getDueInfo(t.DueDate, t.Status)?.state === "overdue";
+
   const filteredTasks =
     statusFilter === "all"
       ? tasks
-      : tasks.filter((t) => t.Status === statusFilter);
+      : statusFilter === "overdue"
+        ? tasks.filter(isOverdue)
+        : tasks.filter((t) => t.Status === statusFilter);
+
+  const overdueCount = tasks.filter(isOverdue).length;
 
   const filterOptions = [
     { value: "all", label: "Todas", count: tasks.length },
@@ -76,36 +84,44 @@ export function TaskTable({
       label: s.label,
       count: tasks.filter((t) => t.Status === s.value).length,
     })),
+    { value: "overdue", label: "Vencidas", count: overdueCount },
   ];
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        {filterOptions.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => setStatusFilter(option.value)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-              statusFilter === option.value
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {option.label}
-            <span
+        {filterOptions.map((option) => {
+          const isActive = statusFilter === option.value;
+          const isOverdueFilter = option.value === "overdue";
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setStatusFilter(option.value)}
               className={cn(
-                "rounded-full px-1.5 text-[10px]",
-                statusFilter === option.value
-                  ? "bg-primary-foreground/20"
-                  : "bg-muted"
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                isActive
+                  ? isOverdueFilter
+                    ? "border-destructive bg-destructive text-destructive-foreground"
+                    : "border-primary bg-primary text-primary-foreground"
+                  : isOverdueFilter && option.count > 0
+                    ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted"
               )}
             >
-              {option.count}
-            </span>
-          </button>
-        ))}
+              {isOverdueFilter && <AlertTriangle className="h-3 w-3" />}
+              {option.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-[10px]",
+                  isActive ? "bg-white/20" : "bg-black/5 dark:bg-white/10"
+                )}
+              >
+                {option.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div>
@@ -311,7 +327,9 @@ export function TaskTable({
       </Table>
         {filteredTasks.length === 0 && (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            Nenhuma tarefa com este status.
+            {statusFilter === "overdue"
+              ? "Nenhuma tarefa vencida. 🎉"
+              : "Nenhuma tarefa com este status."}
           </p>
         )}
       </div>
