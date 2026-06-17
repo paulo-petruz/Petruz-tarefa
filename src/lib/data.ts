@@ -33,6 +33,7 @@ export interface Task {
   WorkspaceName?: string;
   Title: string;
   Description: string | null;
+  Entry?: number | null;
   Status: string;
   Priority: string;
   AssigneeId: number | null;
@@ -44,13 +45,6 @@ export interface Task {
   CreatedAt: Date;
   SubtaskCount: number;
   SubtaskDone: number;
-}
-
-export interface Subtask {
-  Id: number;
-  TaskId: number;
-  Title: string;
-  IsDone: boolean;
 }
 
 // ---------- Usuários ----------
@@ -147,8 +141,8 @@ export async function listWorkspacesForUser(
   const result = await pool.request().input("userId", sql.Int, userId).query(
     `SELECT w.Id, w.Name, w.Description, w.Color, w.OwnerId,
             wm.Role AS MemberRole,
-            (SELECT COUNT(*) FROM dbo.Tasks t WHERE t.WorkspaceId = w.Id) AS TaskCount,
-            (SELECT COUNT(*) FROM dbo.Tasks t WHERE t.WorkspaceId = w.Id AND t.Status = 'done') AS DoneCount
+            (SELECT COUNT(*) FROM dbo.Tasks t WHERE t.WorkspaceId = w.Id AND t.Entry IS NULL) AS TaskCount,
+            (SELECT COUNT(*) FROM dbo.Tasks t WHERE t.WorkspaceId = w.Id AND t.Entry IS NULL AND t.Status = 'done') AS DoneCount
      FROM dbo.Workspaces w
      JOIN dbo.WorkspaceMembers wm ON wm.WorkspaceId = w.Id
      WHERE wm.UserId = @userId
@@ -261,10 +255,11 @@ export async function removeWorkspaceMember(
 
 const TASK_SELECT = `
   SELECT t.Id, t.WorkspaceId, t.Title, t.Description, t.Status, t.Priority,
+    t.Entry,
          t.AssigneeId, a.Name AS AssigneeName, t.CreatedById,
          t.StartDate, t.DueDate, t.Progress, t.CreatedAt, w.Name AS WorkspaceName,
-         (SELECT COUNT(*) FROM dbo.Subtasks s WHERE s.TaskId = t.Id) AS SubtaskCount,
-         (SELECT COUNT(*) FROM dbo.Subtasks s WHERE s.TaskId = t.Id AND s.IsDone = 1) AS SubtaskDone
+    (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id) AS SubtaskCount,
+    (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id AND s.Status = 'done') AS SubtaskDone
   FROM dbo.Tasks t
   LEFT JOIN dbo.Users a ON a.Id = t.AssigneeId
   JOIN dbo.Workspaces w ON w.Id = t.WorkspaceId`;
@@ -278,7 +273,7 @@ export async function listTasksByWorkspace(
     .input("workspaceId", sql.Int, workspaceId)
     .query(
       `${TASK_SELECT}
-       WHERE t.WorkspaceId = @workspaceId
+       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL
        ORDER BY CASE WHEN t.DueDate IS NULL THEN 1 ELSE 0 END, t.DueDate, t.Id DESC`
     );
   return result.recordset;
@@ -303,8 +298,8 @@ export interface TaskInput {
   startDate: string | null;
   dueDate: string | null;
   progress: number;
+  entry?: number | null;
 }
-
 export async function createTask(
   input: TaskInput,
   createdById: number
@@ -318,13 +313,14 @@ export async function createTask(
     .input("status", sql.NVarChar(20), input.status)
     .input("priority", sql.NVarChar(10), input.priority)
     .input("assigneeId", sql.Int, input.assigneeId)
+    .input("entry", sql.Int, input.entry)
     .input("startDate", sql.Date, input.startDate)
     .input("dueDate", sql.Date, input.dueDate)
     .input("progress", sql.Int, input.progress)
     .input("createdById", sql.Int, createdById)
     .query(
-      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, AssigneeId, StartDate, DueDate, Progress, CreatedById)
-       VALUES (@workspaceId, @title, @description, @status, @priority, @assigneeId, @startDate, @dueDate, @progress, @createdById)`
+      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, Progress, CreatedById)
+       VALUES (@workspaceId, @title, @description, @status, @priority, @entry, @assigneeId, @startDate, @dueDate, @progress, @createdById)`
     );
 }
 
@@ -381,86 +377,29 @@ export async function updateTaskProgress(
 
 export async function deleteTask(id: number): Promise<void> {
   const pool = await getPool();
+  // Apaga a tarefa e suas subtarefas (filhas com Entry = id).
   await pool
     .request()
     .input("id", sql.Int, id)
-    .query("DELETE FROM dbo.Tasks WHERE Id = @id");
+    .query("DELETE FROM dbo.Tasks WHERE Id = @id OR Entry = @id");
 }
 
-// ---------- Subtarefas ----------
+// ---------- Subtarefas (tarefas-filhas: Entry = Id da tarefa-mãe) ----------
 
+/** Lista as subtarefas (tarefas-filhas) do workspace, com todos os atributos. */
 export async function listSubtasksByWorkspace(
   workspaceId: number
-): Promise<Subtask[]> {
+): Promise<Task[]> {
   const pool = await getPool();
   const result = await pool
     .request()
     .input("workspaceId", sql.Int, workspaceId)
     .query(
-      `SELECT s.Id, s.TaskId, s.Title, s.IsDone
-       FROM dbo.Subtasks s
-       JOIN dbo.Tasks t ON t.Id = s.TaskId
-       WHERE t.WorkspaceId = @workspaceId
-       ORDER BY s.Id`
+      `${TASK_SELECT}
+       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NOT NULL
+       ORDER BY t.Id`
     );
   return result.recordset;
-}
-
-/** Retorna a subtarefa com dados da tarefa pai (para autorização). */
-export async function getSubtaskWithWorkspace(
-  id: number
-): Promise<
-  | (Subtask & {
-      WorkspaceId: number;
-      AssigneeId: number | null;
-      CreatedById: number;
-    })
-  | null
-> {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input("id", sql.Int, id)
-    .query(
-      `SELECT s.Id, s.TaskId, s.Title, s.IsDone,
-              t.WorkspaceId, t.AssigneeId, t.CreatedById
-       FROM dbo.Subtasks s
-       JOIN dbo.Tasks t ON t.Id = s.TaskId
-       WHERE s.Id = @id`
-    );
-  return result.recordset[0] ?? null;
-}
-
-export async function createSubtask(
-  taskId: number,
-  title: string
-): Promise<void> {
-  const pool = await getPool();
-  await pool
-    .request()
-    .input("taskId", sql.Int, taskId)
-    .input("title", sql.NVarChar(200), title.trim())
-    .query("INSERT INTO dbo.Subtasks (TaskId, Title) VALUES (@taskId, @title)");
-}
-
-export async function setSubtaskDone(
-  id: number,
-  isDone: boolean
-): Promise<void> {
-  const pool = await getPool();
-  await pool
-    .request()
-    .input("id", sql.Int, id)
-    .input("isDone", sql.Bit, isDone)
-    .query("UPDATE dbo.Subtasks SET IsDone = @isDone WHERE Id = @id");
-}
-
-export async function deleteSubtask(id: number): Promise<void> {
-  const pool = await getPool();
-  await pool
-    .request()
-    .input("id", sql.Int, id)
-    .query("DELETE FROM dbo.Subtasks WHERE Id = @id");
 }
 
 // ---------- Painel (dashboard) ----------
@@ -482,6 +421,7 @@ export async function getStatusCountsForUser(
      FROM dbo.Tasks t
      JOIN dbo.Workspaces w ON w.Id = t.WorkspaceId
      JOIN dbo.WorkspaceMembers wm ON wm.WorkspaceId = w.Id AND wm.UserId = @userId
+     WHERE t.Entry IS NULL
      GROUP BY w.Id, w.Name, w.Color, t.Status`
   );
   return result.recordset;
@@ -500,7 +440,8 @@ export async function getDueAlertsForUser(
     .query(
       `${TASK_SELECT}
        JOIN dbo.WorkspaceMembers wm ON wm.WorkspaceId = t.WorkspaceId AND wm.UserId = @userId
-       WHERE t.Status <> 'done'
+       WHERE t.Entry IS NULL
+         AND t.Status <> 'done'
          AND t.DueDate IS NOT NULL
          AND t.DueDate <= DATEADD(day, @days, CAST(GETDATE() AS DATE))
        ORDER BY t.DueDate`

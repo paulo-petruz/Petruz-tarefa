@@ -6,7 +6,7 @@ import {
   listSubtasksByWorkspace,
   listTasksByWorkspace,
   listWorkspaceMembers,
-  type Subtask,
+  type Task,
 } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,9 +38,9 @@ export default async function WorkspacePage({
     listSubtasksByWorkspace(workspaceId),
   ]);
 
-  const subtasksByTask = subtasks.reduce<Record<number, Subtask[]>>(
+  const subtasksByTask = subtasks.reduce<Record<number, Task[]>>(
     (acc, subtask) => {
-      (acc[subtask.TaskId] ??= []).push(subtask);
+      if (subtask.Entry != null) (acc[subtask.Entry] ??= []).push(subtask);
       return acc;
     },
     {}

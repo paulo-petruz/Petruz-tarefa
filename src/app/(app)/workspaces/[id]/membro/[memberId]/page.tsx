@@ -7,7 +7,7 @@ import {
   listSubtasksByWorkspace,
   listTasksByWorkspace,
   listWorkspaceMembers,
-  type Subtask,
+  type Task,
 } from "@/lib/data";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -57,9 +57,9 @@ export default async function MemberFolderPage({
   );
   const taskIds = new Set(tasks.map((t) => t.Id));
   const subtasksByTask = allSubtasks
-    .filter((s) => taskIds.has(s.TaskId))
-    .reduce<Record<number, Subtask[]>>((acc, subtask) => {
-      (acc[subtask.TaskId] ??= []).push(subtask);
+    .filter((s) => s.Entry != null && taskIds.has(s.Entry))
+    .reduce<Record<number, Task[]>>((acc, subtask) => {
+      (acc[subtask.Entry as number] ??= []).push(subtask);
       return acc;
     }, {});
 

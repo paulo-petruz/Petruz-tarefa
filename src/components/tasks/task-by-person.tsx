@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Plus, Search, UserRound } from "lucide-react";
-import type { Subtask, Task, WorkspaceMember } from "@/lib/data";
+import type { Task, WorkspaceMember } from "@/lib/data";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,6 @@ export function TaskByPerson({
   workspaceId: number;
   currentUserId: number;
   isAdmin: boolean;
-  subtasksByTask?: Record<number, Subtask[]>;
 }) {
   const [search, setSearch] = useState("");
 

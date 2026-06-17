@@ -42,6 +42,7 @@ const DDL_STATEMENTS: string[] = [
      Description NVARCHAR(2000) NULL,
      Status NVARCHAR(20) NOT NULL DEFAULT 'todo',
      Priority NVARCHAR(10) NOT NULL DEFAULT 'medium',
+     Entry INT NULL,
      AssigneeId INT NULL REFERENCES dbo.Users(Id),
      CreatedById INT NOT NULL REFERENCES dbo.Users(Id),
      StartDate DATE NULL,
@@ -63,6 +64,12 @@ const DDL_STATEMENTS: string[] = [
      IsDone BIT NOT NULL DEFAULT 0,
      CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
    )`,
+
+  `IF COL_LENGTH('dbo.Tasks', 'Entry') IS NULL
+   ALTER TABLE dbo.Tasks ADD Entry INT NULL`,
+
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_Entry')
+   CREATE INDEX IX_Tasks_Entry ON dbo.Tasks (Entry)`,
 
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Subtasks_TaskId')
    CREATE INDEX IX_Subtasks_TaskId ON dbo.Subtasks (TaskId)`,

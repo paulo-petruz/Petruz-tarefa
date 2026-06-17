@@ -1,6 +1,6 @@
 import { CalendarClock, CalendarPlus, Pencil } from "lucide-react";
 import { TASK_STATUSES } from "@/lib/constants";
-import type { Subtask, Task, WorkspaceMember } from "@/lib/data";
+import type { Task, WorkspaceMember } from "@/lib/data";
 import { formatDate } from "@/lib/dates";
 import { canEditTask } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ export function TaskBoard({
   tasks: Task[];
   members: WorkspaceMember[];
   workspaceId: number;
-  subtasksByTask: Record<number, Subtask[]>;
+  subtasksByTask: Record<number, Task[]>;
   currentUserId: number;
   isAdmin: boolean;
 }) {
@@ -64,7 +64,7 @@ export function TaskBoard({
                               workspaceId={workspaceId}
                               members={members}
                               task={toFormValues(task)}
-                              subtasks={subtasksByTask[task.Id] ?? []}
+                              hasSubtasks={(subtasksByTask[task.Id] ?? []).length > 0}
                               currentUserId={currentUserId}
                               isAdmin={isAdmin}
                               trigger={

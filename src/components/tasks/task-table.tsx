@@ -1,11 +1,10 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { CheckCircle2, ChevronRight, Circle, Pencil } from "lucide-react";
-import type { Subtask, Task, WorkspaceMember } from "@/lib/data";
+import { AlertTriangle, ChevronRight, Pencil, Plus } from "lucide-react";
+import type { Task, WorkspaceMember } from "@/lib/data";
 import { TASK_STATUSES } from "@/lib/constants";
 import { formatDate, getDueInfo } from "@/lib/dates";
-import { AlertTriangle } from "lucide-react";
 import { canEditTask } from "@/lib/permissions";
 import { initials, toFormValues } from "./task-utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -22,7 +21,6 @@ import { cn } from "@/lib/utils";
 import { DueBadge } from "./due-badge";
 import { PriorityBadge } from "./priority-badge";
 import { StatusBadge } from "./status-badge";
-import { SubtaskList } from "./subtask-list";
 import { TaskDeleteButton } from "./task-delete-button";
 import { TaskDialog } from "./task-dialog";
 import { TaskProgress } from "./task-progress";
@@ -42,7 +40,7 @@ export function TaskTable({
   tasks: Task[];
   members: WorkspaceMember[];
   workspaceId: number;
-  subtasksByTask: Record<number, Subtask[]>;
+  subtasksByTask: Record<number, Task[]>;
   currentUserId: number;
   isAdmin: boolean;
 }) {
@@ -170,7 +168,7 @@ export function TaskTable({
                 >
                   <TableCell className="min-w-[260px] py-3 align-top">
                     <div className="flex items-start gap-1.5">
-                      {hasSubtasks ? (
+                      {hasSubtasks || editable ? (
                         <button
                           type="button"
                           onClick={() => toggleExpanded(task.Id)}
@@ -187,8 +185,12 @@ export function TaskTable({
                               isOpen && "rotate-90"
                             )}
                           />
-                          {subtasks.filter((s) => s.IsDone).length}/
-                          {subtasks.length}
+                          {hasSubtasks && (
+                            <span className="tabular-nums">
+                              {subtasks.filter((s) => s.Status === "done").length}/
+                              {subtasks.length}
+                            </span>
+                          )}
                         </button>
                       ) : (
                         <span className="w-5 shrink-0" />
@@ -269,7 +271,7 @@ export function TaskTable({
                           workspaceId={workspaceId}
                           members={members}
                           task={toFormValues(task)}
-                          subtasks={subtasks}
+                          hasSubtasks={hasSubtasks}
                           currentUserId={currentUserId}
                           isAdmin={isAdmin}
                           trigger={
@@ -293,33 +295,136 @@ export function TaskTable({
                 </TableRow>
                 {isOpen && (
                   <TableRow className="border-b bg-muted/20 hover:bg-muted/20 last:border-0">
-                    <TableCell colSpan={COLUMN_COUNT} className="py-3 pl-12">
-                      <div className="max-w-md">
-                        {editable ? (
-                          <SubtaskList taskId={task.Id} subtasks={subtasks} />
-                        ) : (
-                          <ul className="space-y-1.5">
-                            {subtasks.map((subtask) => (
-                              <li
-                                key={subtask.Id}
-                                className="flex items-center gap-2 text-sm"
-                              >
-                                {subtask.IsDone ? (
-                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
-                                ) : (
-                                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <TableCell colSpan={COLUMN_COUNT} className="py-3 pl-12 pr-4">
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Subtarefas
+                        </p>
+                        {subtasks.length === 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            Nenhuma subtarefa ainda.
+                          </p>
+                        )}
+                        {subtasks.map((sub) => {
+                          const subEditable = canEditTask(
+                            sub,
+                            currentUserId,
+                            isAdmin
+                          );
+                          return (
+                            <div
+                              key={sub.Id}
+                              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-card px-3 py-2"
+                            >
+                              <div className="min-w-[180px] flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-sm font-medium">
+                                    {sub.Title}
+                                  </span>
+                                  <PriorityBadge priority={sub.Priority} />
+                                </div>
+                                {sub.Description && (
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    {sub.Description}
+                                  </p>
                                 )}
-                                <span
-                                  className={cn(
-                                    subtask.IsDone &&
-                                      "text-muted-foreground line-through"
-                                  )}
+                              </div>
+                              {subEditable ? (
+                                <TaskStatusSelect
+                                  taskId={sub.Id}
+                                  status={sub.Status}
+                                />
+                              ) : (
+                                <StatusBadge status={sub.Status} />
+                              )}
+                              {subEditable ? (
+                                <TaskProgressEditor
+                                  taskId={sub.Id}
+                                  status={sub.Status}
+                                  subtaskCount={sub.SubtaskCount}
+                                  subtaskDone={sub.SubtaskDone}
+                                  manualProgress={sub.Progress}
+                                />
+                              ) : (
+                                <TaskProgress
+                                  status={sub.Status}
+                                  subtaskCount={sub.SubtaskCount}
+                                  subtaskDone={sub.SubtaskDone}
+                                  manualProgress={sub.Progress}
+                                />
+                              )}
+                              {sub.AssigneeName ? (
+                                <div
+                                  className="flex items-center gap-1.5"
+                                  title={sub.AssigneeName}
                                 >
-                                  {subtask.Title}
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarFallback className="bg-primary/15 text-[10px] font-semibold text-primary">
+                                      {initials(sub.AssigneeName)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  Sem responsável
                                 </span>
-                              </li>
-                            ))}
-                          </ul>
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDate(sub.DueDate)}
+                                </span>
+                                <DueBadge
+                                  dueDate={sub.DueDate}
+                                  status={sub.Status}
+                                />
+                              </div>
+                              {subEditable && (
+                                <div className="flex items-center">
+                                  <TaskDialog
+                                    workspaceId={workspaceId}
+                                    members={members}
+                                    task={toFormValues(sub)}
+                                    currentUserId={currentUserId}
+                                    isAdmin={isAdmin}
+                                    trigger={
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-muted-foreground"
+                                        title="Editar subtarefa"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                  />
+                                  <TaskDeleteButton
+                                    taskId={sub.Id}
+                                    taskTitle={sub.Title}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {editable && (
+                          <TaskDialog
+                            workspaceId={workspaceId}
+                            members={members}
+                            entryId={task.Id}
+                            defaultAssigneeId={task.AssigneeId ?? undefined}
+                            currentUserId={currentUserId}
+                            isAdmin={isAdmin}
+                            trigger={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-1"
+                              >
+                                <Plus className="mr-1.5 h-4 w-4" />
+                                Adicionar subtarefa
+                              </Button>
+                            }
+                          />
                         )}
                       </div>
                     </TableCell>

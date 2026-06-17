@@ -9,9 +9,7 @@ import {
   type ActionState,
 } from "@/lib/actions";
 import { TASK_PRIORITIES, TASK_STATUSES } from "@/lib/constants";
-import type { Subtask, WorkspaceMember } from "@/lib/data";
-import { Separator } from "@/components/ui/separator";
-import { SubtaskList } from "./subtask-list";
+import type { WorkspaceMember } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,7 +43,13 @@ export interface TaskFormValues {
   progress: number;
 }
 
-function SubmitButton({ isEdit }: { isEdit: boolean }) {
+function SubmitButton({
+  isEdit,
+  isSubtask,
+}: {
+  isEdit: boolean;
+  isSubtask: boolean;
+}) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending} className="w-full">
@@ -53,7 +57,9 @@ function SubmitButton({ isEdit }: { isEdit: boolean }) {
         ? "Salvando..."
         : isEdit
           ? "Salvar alterações"
-          : "Criar tarefa"}
+          : isSubtask
+            ? "Criar subtarefa"
+            : "Criar tarefa"}
     </Button>
   );
 }
@@ -64,7 +70,8 @@ export function TaskDialog({
   workspaceId,
   members,
   task,
-  subtasks,
+  hasSubtasks = false,
+  entryId,
   defaultAssigneeId,
   currentUserId,
   isAdmin,
@@ -73,12 +80,16 @@ export function TaskDialog({
   workspaceId: number;
   members: WorkspaceMember[];
   task?: TaskFormValues;
-  subtasks?: Subtask[];
+  /** True quando a tarefa-mãe possui subtarefas (progresso vem delas). */
+  hasSubtasks?: boolean;
+  /** Id da tarefa-mãe ao criar uma subtarefa. */
+  entryId?: number;
   defaultAssigneeId?: number;
   currentUserId: number;
   isAdmin: boolean;
   trigger: ReactNode;
 }) {
+  const isSubtask = entryId !== undefined && !task;
   // Membros comuns só podem atribuir tarefas a si mesmos; mantém o
   // responsável atual visível em modo edição.
   const selectableMembers = isAdmin
@@ -105,11 +116,19 @@ export function TaskDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{task ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
+          <DialogTitle>
+            {task
+              ? "Editar tarefa"
+              : isSubtask
+                ? "Nova subtarefa"
+                : "Nova tarefa"}
+          </DialogTitle>
           <DialogDescription>
             {task
               ? "Atualize as informações da tarefa."
-              : "Descreva a tarefa, defina prazos e o responsável."}
+              : isSubtask
+                ? "A subtarefa tem os mesmos atributos de uma tarefa."
+                : "Descreva a tarefa, defina prazos e o responsável."}
           </DialogDescription>
         </DialogHeader>
         <form action={formAction} className="space-y-4">
@@ -119,6 +138,9 @@ export function TaskDialog({
             </Alert>
           )}
           <input type="hidden" name="workspaceId" value={workspaceId} />
+          {entryId !== undefined && (
+            <input type="hidden" name="entry" value={entryId} />
+          )}
           <div className="space-y-2">
             <Label htmlFor="task-title">Título</Label>
             <Input
@@ -223,22 +245,16 @@ export function TaskDialog({
               min={0}
               max={100}
               defaultValue={task?.progress ?? 0}
-              disabled={(subtasks?.length ?? 0) > 0}
+              disabled={hasSubtasks}
             />
             <p className="text-xs text-muted-foreground">
-              {(subtasks?.length ?? 0) > 0
+              {hasSubtasks
                 ? "Calculado automaticamente pelas subtarefas."
                 : "Digite quanto da tarefa já foi concluído (0 a 100)."}
             </p>
           </div>
-          <SubmitButton isEdit={Boolean(task)} />
+          <SubmitButton isEdit={Boolean(task)} isSubtask={isSubtask} />
         </form>
-        {task && (
-          <>
-            <Separator />
-            <SubtaskList taskId={task.id} subtasks={subtasks ?? []} />
-          </>
-        )}
       </DialogContent>
     </Dialog>
   );

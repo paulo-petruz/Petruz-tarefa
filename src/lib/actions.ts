@@ -306,6 +306,8 @@ const taskSchema = z
       .min(0, "O progresso deve ser entre 0 e 100.")
       .max(100, "O progresso deve ser entre 0 e 100.")
       .optional(),
+    // Id da tarefa-mãe quando se cria uma subtarefa.
+    entry: z.coerce.number().int().positive().optional(),
   })
   .refine(
     (t) => !t.startDate || !t.dueDate || t.startDate <= t.dueDate,
@@ -323,6 +325,7 @@ function parseTaskForm(formData: FormData) {
     startDate: formData.get("startDate") || undefined,
     dueDate: formData.get("dueDate") || undefined,
     progress: formData.get("progress") || undefined,
+    entry: formData.get("entry") || undefined,
   });
 }
 
@@ -360,6 +363,7 @@ export async function createTaskAction(
         startDate: parsed.data.startDate ?? null,
         dueDate: parsed.data.dueDate ?? null,
         progress: parsed.data.progress ?? 0,
+        entry: parsed.data.entry ?? null,
       },
       user.id
     );
@@ -458,77 +462,6 @@ export async function updateTaskProgressAction(
     return {
       error:
         err instanceof Error ? err.message : "Erro ao atualizar o progresso.",
-    };
-  }
-  revalidatePath("/dashboard");
-  return { success: true };
-}
-
-// ---------- Subtarefas ----------
-
-const subtaskTitleSchema = z
-  .string()
-  .min(1, "Informe o título da subtarefa.")
-  .max(200, "Título muito longo.");
-
-export async function createSubtaskAction(
-  taskId: number,
-  title: string
-): Promise<ActionState> {
-  const user = await requireUser();
-  const parsed = subtaskTitleSchema.safeParse(title?.trim());
-  if (!parsed.success) return { error: firstError(parsed.error) };
-
-  try {
-    const task = await data.getTask(taskId);
-    if (!task) return { error: "Tarefa não encontrada." };
-    await assertCanEditTask(task, user);
-    await data.createSubtask(taskId, parsed.data);
-    revalidatePath(`/workspaces/${task.WorkspaceId}`);
-  } catch (err) {
-    return {
-      error: err instanceof Error ? err.message : "Erro ao criar a subtarefa.",
-    };
-  }
-  revalidatePath("/dashboard");
-  return { success: true };
-}
-
-export async function toggleSubtaskAction(
-  subtaskId: number,
-  isDone: boolean
-): Promise<ActionState> {
-  const user = await requireUser();
-  try {
-    const subtask = await data.getSubtaskWithWorkspace(subtaskId);
-    if (!subtask) return { error: "Subtarefa não encontrada." };
-    await assertCanEditTask(subtask, user);
-    await data.setSubtaskDone(subtaskId, isDone);
-    revalidatePath(`/workspaces/${subtask.WorkspaceId}`);
-  } catch (err) {
-    return {
-      error:
-        err instanceof Error ? err.message : "Erro ao atualizar a subtarefa.",
-    };
-  }
-  revalidatePath("/dashboard");
-  return { success: true };
-}
-
-export async function deleteSubtaskAction(
-  subtaskId: number
-): Promise<ActionState> {
-  const user = await requireUser();
-  try {
-    const subtask = await data.getSubtaskWithWorkspace(subtaskId);
-    if (!subtask) return { error: "Subtarefa não encontrada." };
-    await assertCanEditTask(subtask, user);
-    await data.deleteSubtask(subtaskId);
-    revalidatePath(`/workspaces/${subtask.WorkspaceId}`);
-  } catch (err) {
-    return {
-      error:
-        err instanceof Error ? err.message : "Erro ao excluir a subtarefa.",
     };
   }
   revalidatePath("/dashboard");
