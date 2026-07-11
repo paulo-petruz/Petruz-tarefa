@@ -59,7 +59,7 @@ export function Sidebar({
         {!collapsed && (
           <div>
             <p className="text-base font-semibold leading-tight">
-              Petruz Tasks
+              Petruz Tarefas
             </p>
             <p className="text-xs text-sidebar-foreground/60">
               Gerenciador de tarefas

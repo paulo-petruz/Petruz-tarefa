@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { ResetPasswordDialog } from "@/components/admin/reset-password-dialog";
 
-export const metadata = { title: "Administração — Petruz Tasks" };
+export const metadata = { title: "Administração — Petruz Tarefas" };
 
 export default async function AdminPage({
   searchParams,

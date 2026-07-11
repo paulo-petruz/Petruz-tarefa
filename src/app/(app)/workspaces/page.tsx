@@ -13,7 +13,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
-export const metadata = { title: "Espaços de trabalho — Petruz Tasks" };
+export const metadata = { title: "Espaços de trabalho — Petruz Tarefas" };
 
 export default async function WorkspacesPage({
   searchParams,

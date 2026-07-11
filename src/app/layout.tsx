@@ -11,7 +11,7 @@ const geistSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Petruz Tasks",
+  title: "Petruz Tarefas",
   description: "Gerenciador de tarefas da empresa Petruz",
 };
 

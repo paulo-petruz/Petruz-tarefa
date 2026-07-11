@@ -17,7 +17,7 @@ import { STATUS_CHIPS } from "@/components/tasks/task-utils";
 import { formatDateShort } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "Painel — Petruz Tasks" };
+export const metadata = { title: "Painel — Petruz Tarefas" };
 
 export default async function DashboardPage() {
   const user = await requireUser();

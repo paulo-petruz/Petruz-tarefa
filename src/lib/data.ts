@@ -417,7 +417,7 @@ export async function listSubtasksByWorkspace(
     .query(
       `${TASK_SELECT}
        WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NOT NULL
-       ORDER BY t.Id`
+       ORDER BY t.Id DESC`
     );
   return result.recordset;
 }

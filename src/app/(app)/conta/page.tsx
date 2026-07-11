@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { ChangePasswordForm } from "@/components/account/change-password-form";
 
-export const metadata = { title: "Minha conta — Petruz Tasks" };
+export const metadata = { title: "Minha conta — Petruz Tarefas" };
 
 export default async function AccountPage() {
   const user = await requireUser();

@@ -1,4 +1,4 @@
-# Petruz Tasks
+# Petruz Tarefas
 
 Gerenciador de tarefas da empresa Petruz — um "ClickUp simplificado" com
 espaços de trabalho, tarefas com status/responsável/prazos, alertas de
