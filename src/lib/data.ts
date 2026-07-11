@@ -41,6 +41,7 @@ export interface Task {
   CreatedById: number;
   StartDate: Date | null;
   DueDate: Date | null;
+  CompletedDate: Date | null;
   Progress: number;
   CreatedAt: Date;
   SubtaskCount: number;
@@ -257,7 +258,7 @@ const TASK_SELECT = `
   SELECT t.Id, t.WorkspaceId, t.Title, t.Description, t.Status, t.Priority,
     t.Entry,
          t.AssigneeId, a.Name AS AssigneeName, t.CreatedById,
-         t.StartDate, t.DueDate, t.Progress, t.CreatedAt, w.Name AS WorkspaceName,
+         t.StartDate, t.DueDate, t.CompletedDate, t.Progress, t.CreatedAt, w.Name AS WorkspaceName,
     (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id) AS SubtaskCount,
     (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id AND s.Status = 'done') AS SubtaskDone
   FROM dbo.Tasks t
@@ -319,13 +320,17 @@ export async function createTask(
     .input("progress", sql.Int, input.progress)
     .input("createdById", sql.Int, createdById)
     .query(
-      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, Progress, CreatedById)
-       VALUES (@workspaceId, @title, @description, @status, @priority, @entry, @assigneeId, @startDate, @dueDate, @progress, @createdById)`
+      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, CompletedDate, Progress, CreatedById)
+       VALUES (@workspaceId, @title, @description, @status, @priority, @entry, @assigneeId, @startDate, @dueDate,
+               CASE WHEN @status = 'done' THEN CAST(GETDATE() AS DATE) ELSE NULL END,
+               @progress, @createdById)`
     );
 }
 
 export async function updateTask(id: number, input: TaskInput): Promise<void> {
   const pool = await getPool();
+  // Início e vencimento são imutáveis após a criação: não entram no UPDATE.
+  // CompletedDate é gerenciada pelo status (preenche ao concluir, limpa ao reabrir).
   await pool
     .request()
     .input("id", sql.Int, id)
@@ -334,14 +339,14 @@ export async function updateTask(id: number, input: TaskInput): Promise<void> {
     .input("status", sql.NVarChar(20), input.status)
     .input("priority", sql.NVarChar(10), input.priority)
     .input("assigneeId", sql.Int, input.assigneeId)
-    .input("startDate", sql.Date, input.startDate)
-    .input("dueDate", sql.Date, input.dueDate)
     .input("progress", sql.Int, input.progress)
     .query(
       `UPDATE dbo.Tasks
        SET Title = @title, Description = @description, Status = @status,
-           Priority = @priority, AssigneeId = @assigneeId,
-           StartDate = @startDate, DueDate = @dueDate, Progress = @progress,
+           Priority = @priority, AssigneeId = @assigneeId, Progress = @progress,
+           CompletedDate = CASE WHEN @status = 'done'
+                                THEN COALESCE(CompletedDate, CAST(GETDATE() AS DATE))
+                                ELSE NULL END,
            UpdatedAt = SYSUTCDATETIME()
        WHERE Id = @id`
     );
@@ -357,7 +362,13 @@ export async function updateTaskStatus(
     .input("id", sql.Int, id)
     .input("status", sql.NVarChar(20), status)
     .query(
-      `UPDATE dbo.Tasks SET Status = @status, UpdatedAt = SYSUTCDATETIME() WHERE Id = @id`
+      `UPDATE dbo.Tasks
+       SET Status = @status,
+           CompletedDate = CASE WHEN @status = 'done'
+                                THEN COALESCE(CompletedDate, CAST(GETDATE() AS DATE))
+                                ELSE NULL END,
+           UpdatedAt = SYSUTCDATETIME()
+       WHERE Id = @id`
     );
 }
 

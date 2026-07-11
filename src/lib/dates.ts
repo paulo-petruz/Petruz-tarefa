@@ -18,6 +18,14 @@ export function formatDate(date: Date | string | null): string {
   return `${day}/${month}/${year}`;
 }
 
+/** Formato curto dd/MM para exibição resumida das datas das tarefas. */
+export function formatDateShort(date: Date | string | null): string {
+  const iso = toISODate(date);
+  if (!iso) return "—";
+  const [, month, day] = iso.split("-");
+  return `${day}/${month}`;
+}
+
 function isoToLocalDate(iso: string): Date {
   const [year, month, day] = iso.split("-").map(Number);
   return new Date(year, month - 1, day);

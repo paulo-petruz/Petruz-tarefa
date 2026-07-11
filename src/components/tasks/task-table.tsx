@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { AlertTriangle, ChevronRight, Pencil, Plus } from "lucide-react";
 import type { Task, WorkspaceMember } from "@/lib/data";
 import { TASK_STATUSES } from "@/lib/constants";
-import { formatDate, getDueInfo } from "@/lib/dates";
+import { formatDateShort, getDueInfo } from "@/lib/dates";
 import { canEditTask } from "@/lib/permissions";
 import { initials, toFormValues } from "./task-utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,7 +27,7 @@ import { TaskProgress } from "./task-progress";
 import { TaskProgressEditor } from "./task-progress-editor";
 import { TaskStatusSelect } from "./task-status-select";
 
-const COLUMN_COUNT = 7;
+const COLUMN_COUNT = 8;
 
 export function TaskTable({
   tasks,
@@ -147,7 +147,10 @@ export function TaskTable({
               Início
             </TableHead>
             <TableHead className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Vencimento
+              Previsão
+            </TableHead>
+            <TableHead className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Conclusão
             </TableHead>
             <TableHead className="w-[80px]" />
           </TableRow>
@@ -252,17 +255,28 @@ export function TaskTable({
                     )}
                   </TableCell>
                   <TableCell className="py-3">
-                    <span className="text-sm text-muted-foreground">
-                      {formatDate(task.StartDate)}
+                    <span className="whitespace-nowrap text-sm text-muted-foreground">
+                      {formatDateShort(task.StartDate)}
                     </span>
                   </TableCell>
                   <TableCell className="py-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        {formatDate(task.DueDate)}
+                      <span className="whitespace-nowrap text-sm text-muted-foreground">
+                        {formatDateShort(task.DueDate)}
                       </span>
                       <DueBadge dueDate={task.DueDate} status={task.Status} />
                     </div>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <span className="whitespace-nowrap text-sm text-muted-foreground">
+                      {task.CompletedDate ? (
+                        <span className="text-green-600 dark:text-green-400">
+                          {formatDateShort(task.CompletedDate)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell className="py-3">
                     {editable && (
@@ -370,8 +384,10 @@ export function TaskTable({
                                 </span>
                               )}
                               <div className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDate(sub.DueDate)}
+                                <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                  {sub.CompletedDate
+                                    ? `✓ ${formatDateShort(sub.CompletedDate)}`
+                                    : formatDateShort(sub.DueDate)}
                                 </span>
                                 <DueBadge
                                   dueDate={sub.DueDate}

@@ -1,7 +1,7 @@
-import { CalendarClock, CalendarPlus, Pencil } from "lucide-react";
+import { CalendarCheck, CalendarClock, CalendarPlus, Pencil } from "lucide-react";
 import { TASK_STATUSES } from "@/lib/constants";
 import type { Task, WorkspaceMember } from "@/lib/data";
-import { formatDate } from "@/lib/dates";
+import { formatDateShort } from "@/lib/dates";
 import { canEditTask } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -106,16 +106,25 @@ export function TaskBoard({
                               title="Início"
                             >
                               <CalendarPlus className="h-3 w-3" />
-                              {formatDate(task.StartDate)}
+                              {formatDateShort(task.StartDate)}
                             </span>
                           )}
                           {task.DueDate && (
                             <span
                               className="flex items-center gap-1"
-                              title="Vencimento"
+                              title="Previsão de término"
                             >
                               <CalendarClock className="h-3 w-3" />
-                              {formatDate(task.DueDate)}
+                              {formatDateShort(task.DueDate)}
+                            </span>
+                          )}
+                          {task.CompletedDate && (
+                            <span
+                              className="flex items-center gap-1 text-green-600 dark:text-green-400"
+                              title="Concluída em"
+                            >
+                              <CalendarCheck className="h-3 w-3" />
+                              {formatDateShort(task.CompletedDate)}
                             </span>
                           )}
                         </div>

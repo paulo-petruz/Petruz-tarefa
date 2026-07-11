@@ -40,6 +40,7 @@ export interface TaskFormValues {
   assigneeId: number | null;
   startDate: string | null; // yyyy-MM-dd
   dueDate: string | null; // yyyy-MM-dd
+  completedDate: string | null; // yyyy-MM-dd
   progress: number;
 }
 
@@ -224,18 +225,40 @@ export function TaskDialog({
                 name="startDate"
                 type="date"
                 defaultValue={task?.startDate ?? ""}
+                disabled={Boolean(task)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="task-due">Vencimento</Label>
+              <Label htmlFor="task-due">Previsão de término</Label>
               <Input
                 id="task-due"
                 name="dueDate"
                 type="date"
                 defaultValue={task?.dueDate ?? ""}
+                disabled={Boolean(task)}
               />
             </div>
           </div>
+          {task && (
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Início e previsão de término não podem ser alterados após a
+              criação.
+            </p>
+          )}
+          {task?.completedDate && (
+            <div className="space-y-2">
+              <Label htmlFor="task-completed">Concluída em</Label>
+              <Input
+                id="task-completed"
+                type="date"
+                defaultValue={task.completedDate}
+                disabled
+              />
+              <p className="text-xs text-muted-foreground">
+                Preenchida automaticamente ao concluir a tarefa.
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="task-progress">Progresso (%)</Label>
             <Input

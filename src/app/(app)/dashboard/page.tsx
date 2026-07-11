@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { DueBadge } from "@/components/tasks/due-badge";
 import { STATUS_CHIPS } from "@/components/tasks/task-utils";
-import { formatDate } from "@/lib/dates";
+import { formatDateShort } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Painel — Petruz Tasks" };
@@ -147,7 +147,7 @@ export default async function DashboardPage() {
                                     </p>
                                     <p className="text-xs text-muted-foreground">
                                       {task.AssigneeName ?? "Sem responsável"} ·{" "}
-                                      {formatDate(task.DueDate)}
+                                      {formatDateShort(task.DueDate)}
                                     </p>
                                   </div>
                                   <DueBadge

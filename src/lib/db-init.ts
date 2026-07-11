@@ -47,6 +47,7 @@ const DDL_STATEMENTS: string[] = [
      CreatedById INT NOT NULL REFERENCES dbo.Users(Id),
      StartDate DATE NULL,
      DueDate DATE NULL,
+     CompletedDate DATE NULL,
      Progress INT NOT NULL DEFAULT 0,
      CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
      UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
@@ -55,6 +56,15 @@ const DDL_STATEMENTS: string[] = [
   // Migração para bancos criados antes da coluna de progresso manual
   `IF COL_LENGTH('dbo.Tasks', 'Progress') IS NULL
    ALTER TABLE dbo.Tasks ADD Progress INT NOT NULL DEFAULT 0`,
+
+  // Data de conclusão (preenchida ao mudar o status para 'done')
+  `IF COL_LENGTH('dbo.Tasks', 'CompletedDate') IS NULL
+   ALTER TABLE dbo.Tasks ADD CompletedDate DATE NULL`,
+
+  // Preenche a data de conclusão de tarefas já concluídas sem data
+  `UPDATE dbo.Tasks
+   SET CompletedDate = CAST(UpdatedAt AS DATE)
+   WHERE Status = 'done' AND CompletedDate IS NULL`,
 
   `IF OBJECT_ID('dbo.Subtasks', 'U') IS NULL
    CREATE TABLE dbo.Subtasks (
