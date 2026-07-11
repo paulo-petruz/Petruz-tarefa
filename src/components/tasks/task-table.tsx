@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { AlertTriangle, ChevronRight, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, ChevronRight, Pencil, Plus, Target } from "lucide-react";
 import type { Task, WorkspaceMember } from "@/lib/data";
 import { TASK_STATUSES } from "@/lib/constants";
 import { formatDateShort, getDueInfo } from "@/lib/dates";
+import { getMetaInfo } from "@/lib/meta";
 import { canEditTask } from "@/lib/permissions";
 import { initials, toFormValues } from "./task-utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { DueBadge } from "./due-badge";
+import { MetaBadge } from "./meta-badge";
 import { PriorityBadge } from "./priority-badge";
 import { SubtaskOverdueBadge } from "./subtask-overdue-badge";
 import { StatusBadge } from "./status-badge";
@@ -67,6 +69,16 @@ export function TaskTable({
   const isOverdue = (t: Task) =>
     getDueInfo(t.DueDate, t.Status)?.state === "overdue";
 
+  const isMetaOffTarget = (t: Task) => {
+    const info = getMetaInfo(
+      t.MetaType,
+      t.MetaValue,
+      t.SubtaskCount,
+      t.SubtaskDone
+    );
+    return info != null && !info.ok;
+  };
+
   // Ordena por criação mais recente primeiro (ID decrescente), em todos os
   // estados — a tarefa adicionada por último aparece no topo.
   const sortTasks = (list: Task[]) => [...list].sort((a, b) => b.Id - a.Id);
@@ -76,19 +88,33 @@ export function TaskTable({
       ? tasks
       : statusFilter === "overdue"
         ? tasks.filter(isOverdue)
-        : tasks.filter((t) => t.Status === statusFilter)
+        : statusFilter === "off_target"
+          ? tasks.filter(isMetaOffTarget)
+          : tasks.filter((t) => t.Status === statusFilter)
   );
 
   const overdueCount = tasks.filter(isOverdue).length;
+  const offTargetCount = tasks.filter(isMetaOffTarget).length;
 
-  const filterOptions = [
+  const filterOptions: {
+    value: string;
+    label: string;
+    count: number;
+    tone?: "danger" | "warning";
+  }[] = [
     { value: "all", label: "Todas", count: tasks.length },
     ...TASK_STATUSES.map((s) => ({
       value: s.value,
       label: s.label,
       count: tasks.filter((t) => t.Status === s.value).length,
     })),
-    { value: "overdue", label: "Vencidas", count: overdueCount },
+    { value: "overdue", label: "Vencidas", count: overdueCount, tone: "danger" },
+    {
+      value: "off_target",
+      label: "Fora da meta",
+      count: offTargetCount,
+      tone: "warning",
+    },
   ];
 
   return (
@@ -96,7 +122,24 @@ export function TaskTable({
       <div className="flex flex-wrap items-center gap-2">
         {filterOptions.map((option) => {
           const isActive = statusFilter === option.value;
-          const isOverdueFilter = option.value === "overdue";
+          const Icon =
+            option.tone === "danger"
+              ? AlertTriangle
+              : option.tone === "warning"
+                ? Target
+                : null;
+          const activeClass =
+            option.tone === "danger"
+              ? "border-destructive bg-destructive text-destructive-foreground"
+              : option.tone === "warning"
+                ? "border-amber-500 bg-amber-500 text-white"
+                : "border-primary bg-primary text-primary-foreground";
+          const idleClass =
+            option.tone === "danger" && option.count > 0
+              ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20"
+              : option.tone === "warning" && option.count > 0
+                ? "border-amber-500/40 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
+                : "border-border bg-card text-muted-foreground hover:bg-muted";
           return (
             <button
               key={option.value}
@@ -104,16 +147,10 @@ export function TaskTable({
               onClick={() => setStatusFilter(option.value)}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                isActive
-                  ? isOverdueFilter
-                    ? "border-destructive bg-destructive text-destructive-foreground"
-                    : "border-primary bg-primary text-primary-foreground"
-                  : isOverdueFilter && option.count > 0
-                    ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20"
-                    : "border-border bg-card text-muted-foreground hover:bg-muted"
+                isActive ? activeClass : idleClass
               )}
             >
-              {isOverdueFilter && <AlertTriangle className="h-3 w-3" />}
+              {Icon && <Icon className="h-3 w-3" />}
               {option.label}
               <span
                 className={cn(
@@ -205,6 +242,12 @@ export function TaskTable({
                             {task.Title}
                           </span>
                           <PriorityBadge priority={task.Priority} />
+                          <MetaBadge
+                            metaType={task.MetaType}
+                            metaValue={task.MetaValue}
+                            subtaskCount={task.SubtaskCount}
+                            subtaskDone={task.SubtaskDone}
+                          />
                           <SubtaskOverdueBadge subtasks={subtasks} />
                         </div>
                         {task.Description && (

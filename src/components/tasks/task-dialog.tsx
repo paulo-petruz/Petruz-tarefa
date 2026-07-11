@@ -42,6 +42,9 @@ export interface TaskFormValues {
   dueDate: string | null; // yyyy-MM-dd
   completedDate: string | null; // yyyy-MM-dd
   progress: number;
+  entry: number | null;
+  metaType: string | null; // 'teto' | 'piso' | null
+  metaValue: number | null;
 }
 
 function SubmitButton({
@@ -91,6 +94,8 @@ export function TaskDialog({
   trigger: ReactNode;
 }) {
   const isSubtask = entryId !== undefined && !task;
+  // Meta só existe em tarefa-mãe: some ao criar/editar subtarefa.
+  const showMeta = !isSubtask && !(task && task.entry != null);
   // Membros comuns só podem atribuir tarefas a si mesmos; mantém o
   // responsável atual visível em modo edição.
   const selectableMembers = isAdmin
@@ -99,6 +104,7 @@ export function TaskDialog({
         (m) => m.UserId === currentUserId || m.UserId === task?.assigneeId
       );
   const [open, setOpen] = useState(false);
+  const [metaType, setMetaType] = useState<string>(task?.metaType ?? "none");
   const action = task
     ? updateTaskAction.bind(null, task.id)
     : createTaskAction;
@@ -276,6 +282,48 @@ export function TaskDialog({
                 : "Digite quanto da tarefa já foi concluído (0 a 100)."}
             </p>
           </div>
+          {showMeta && (
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Meta de subtarefas em aberto</Label>
+                  <Select
+                    name="metaType"
+                    value={metaType}
+                    onValueChange={setMetaType}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem meta</SelectItem>
+                      <SelectItem value="teto">Teto (máximo)</SelectItem>
+                      <SelectItem value="piso">Piso (mínimo)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="task-meta-value">Quantidade</Label>
+                  <Input
+                    id="task-meta-value"
+                    name="metaValue"
+                    type="number"
+                    min={1}
+                    defaultValue={task?.metaValue ?? ""}
+                    disabled={metaType === "none"}
+                    placeholder="Ex.: 10"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {metaType === "teto"
+                  ? "Alerta quando houver mais subtarefas em aberto que a meta."
+                  : metaType === "piso"
+                    ? "Alerta quando houver menos subtarefas em aberto que a meta."
+                    : "Acompanhe quantas subtarefas podem ficar em aberto sem recriar a tarefa a cada ciclo."}
+              </p>
+            </div>
+          )}
           <SubmitButton isEdit={Boolean(task)} isSubtask={isSubtask} />
         </form>
       </DialogContent>

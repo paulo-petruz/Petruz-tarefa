@@ -43,6 +43,8 @@ export interface Task {
   DueDate: Date | null;
   CompletedDate: Date | null;
   Progress: number;
+  MetaType: string | null;
+  MetaValue: number | null;
   CreatedAt: Date;
   SubtaskCount: number;
   SubtaskDone: number;
@@ -258,7 +260,7 @@ const TASK_SELECT = `
   SELECT t.Id, t.WorkspaceId, t.Title, t.Description, t.Status, t.Priority,
     t.Entry,
          t.AssigneeId, a.Name AS AssigneeName, t.CreatedById,
-         t.StartDate, t.DueDate, t.CompletedDate, t.Progress, t.CreatedAt, w.Name AS WorkspaceName,
+         t.StartDate, t.DueDate, t.CompletedDate, t.Progress, t.MetaType, t.MetaValue, t.CreatedAt, w.Name AS WorkspaceName,
     (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id) AS SubtaskCount,
     (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id AND s.Status = 'done') AS SubtaskDone
   FROM dbo.Tasks t
@@ -300,6 +302,8 @@ export interface TaskInput {
   dueDate: string | null;
   progress: number;
   entry?: number | null;
+  metaType?: string | null;
+  metaValue?: number | null;
 }
 export async function createTask(
   input: TaskInput,
@@ -318,12 +322,14 @@ export async function createTask(
     .input("startDate", sql.Date, input.startDate)
     .input("dueDate", sql.Date, input.dueDate)
     .input("progress", sql.Int, input.progress)
+    .input("metaType", sql.NVarChar(10), input.metaType ?? null)
+    .input("metaValue", sql.Int, input.metaValue ?? null)
     .input("createdById", sql.Int, createdById)
     .query(
-      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, CompletedDate, Progress, CreatedById)
+      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, CompletedDate, Progress, MetaType, MetaValue, CreatedById)
        VALUES (@workspaceId, @title, @description, @status, @priority, @entry, @assigneeId, @startDate, @dueDate,
                CASE WHEN @status = 'done' THEN CAST(GETDATE() AS DATE) ELSE NULL END,
-               @progress, @createdById)`
+               @progress, @metaType, @metaValue, @createdById)`
     );
 }
 
@@ -340,10 +346,13 @@ export async function updateTask(id: number, input: TaskInput): Promise<void> {
     .input("priority", sql.NVarChar(10), input.priority)
     .input("assigneeId", sql.Int, input.assigneeId)
     .input("progress", sql.Int, input.progress)
+    .input("metaType", sql.NVarChar(10), input.metaType ?? null)
+    .input("metaValue", sql.Int, input.metaValue ?? null)
     .query(
       `UPDATE dbo.Tasks
        SET Title = @title, Description = @description, Status = @status,
            Priority = @priority, AssigneeId = @assigneeId, Progress = @progress,
+           MetaType = @metaType, MetaValue = @metaValue,
            CompletedDate = CASE WHEN @status = 'done'
                                 THEN COALESCE(CompletedDate, CAST(GETDATE() AS DATE))
                                 ELSE NULL END,

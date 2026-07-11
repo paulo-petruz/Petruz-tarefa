@@ -24,6 +24,9 @@ export function toFormValues(task: Task): TaskFormValues {
     dueDate: toISODate(task.DueDate),
     completedDate: toISODate(task.CompletedDate),
     progress: task.Progress,
+    entry: task.Entry ?? null,
+    metaType: task.MetaType,
+    metaValue: task.MetaValue,
   };
 }
 
