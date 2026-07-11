@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DueBadge } from "./due-badge";
 import { PriorityBadge } from "./priority-badge";
+import { SubtaskOverdueBadge } from "./subtask-overdue-badge";
 import { StatusBadge } from "./status-badge";
 import { TaskDeleteButton } from "./task-delete-button";
 import { TaskDialog } from "./task-dialog";
@@ -204,6 +205,7 @@ export function TaskTable({
                             {task.Title}
                           </span>
                           <PriorityBadge priority={task.Priority} />
+                          <SubtaskOverdueBadge subtasks={subtasks} />
                         </div>
                         {task.Description && (
                           <p className="mt-0.5 text-xs text-muted-foreground">

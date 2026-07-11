@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { DueBadge } from "./due-badge";
 import { PriorityBadge } from "./priority-badge";
+import { SubtaskOverdueBadge } from "./subtask-overdue-badge";
 import { StatusBadge } from "./status-badge";
 import { TaskDeleteButton } from "./task-delete-button";
 import { TaskDialog } from "./task-dialog";
@@ -88,6 +89,10 @@ export function TaskBoard({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <PriorityBadge priority={task.Priority} />
                         <DueBadge dueDate={task.DueDate} status={task.Status} />
+                        <SubtaskOverdueBadge
+                          subtasks={subtasksByTask[task.Id] ?? []}
+                          compact
+                        />
                       </div>
                       <div className="flex items-center gap-2">
                         <Progress value={percent} className="h-1.5" />
