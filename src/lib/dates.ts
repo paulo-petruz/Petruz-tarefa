@@ -35,7 +35,10 @@ export type DueState = "overdue" | "today" | "soon" | "ok";
 
 export interface DueInfo {
   state: DueState;
+  /** Texto completo (usado em tooltip). */
   label: string;
+  /** Texto curto para o badge compacto ("Vencida", "Hoje", "2 dias"). */
+  shortLabel: string;
 }
 
 /** Classifica o vencimento de uma tarefa para exibir alertas. */
@@ -51,14 +54,17 @@ export function getDueInfo(
     return {
       state: "overdue",
       label: days === -1 ? "Venceu ontem" : `Vencida há ${-days} dias`,
+      shortLabel: "Vencida",
     };
   }
-  if (days === 0) return { state: "today", label: "Vence hoje" };
+  if (days === 0)
+    return { state: "today", label: "Vence hoje", shortLabel: "Hoje" };
   if (days <= 3) {
     return {
       state: "soon",
       label: days === 1 ? "Vence amanhã" : `Vence em ${days} dias`,
+      shortLabel: days === 1 ? "Amanhã" : `${days} dias`,
     };
   }
-  return { state: "ok", label: `Vence em ${days} dias` };
+  return { state: "ok", label: `Vence em ${days} dias`, shortLabel: `${days} dias` };
 }

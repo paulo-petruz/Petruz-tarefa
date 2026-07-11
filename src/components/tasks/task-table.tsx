@@ -165,7 +165,7 @@ export function TaskTable({
               <Fragment key={task.Id}>
                 <TableRow
                   className={cn(
-                    "group border-b transition-colors hover:bg-muted/30",
+                    "group border-b transition-colors hover:bg-muted/30 [&>td]:align-top",
                     isOpen ? "border-0 bg-muted/20" : "last:border-0"
                   )}
                 >
@@ -254,21 +254,21 @@ export function TaskTable({
                       <span className="text-sm text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="py-3">
-                    <span className="whitespace-nowrap text-sm text-muted-foreground">
+                  <TableCell className="py-3 align-top">
+                    <span className="block whitespace-nowrap text-sm leading-6 text-muted-foreground">
                       {formatDateShort(task.StartDate)}
                     </span>
                   </TableCell>
-                  <TableCell className="py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="whitespace-nowrap text-sm text-muted-foreground">
+                  <TableCell className="py-3 align-top">
+                    <div className="flex flex-col items-start gap-0.5">
+                      <span className="block whitespace-nowrap text-sm leading-6 text-muted-foreground">
                         {formatDateShort(task.DueDate)}
                       </span>
                       <DueBadge dueDate={task.DueDate} status={task.Status} />
                     </div>
                   </TableCell>
-                  <TableCell className="py-3">
-                    <span className="whitespace-nowrap text-sm text-muted-foreground">
+                  <TableCell className="py-3 align-top">
+                    <span className="block whitespace-nowrap text-sm leading-6 text-muted-foreground">
                       {task.CompletedDate ? (
                         <span className="text-green-600 dark:text-green-400">
                           {formatDateShort(task.CompletedDate)}
@@ -383,7 +383,7 @@ export function TaskTable({
                                   Sem responsável
                                 </span>
                               )}
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex flex-col items-start gap-0.5">
                                 <span className="whitespace-nowrap text-xs text-muted-foreground">
                                   {sub.CompletedDate
                                     ? `✓ ${formatDateShort(sub.CompletedDate)}`

@@ -27,9 +27,15 @@ export function DueBadge({
         : CalendarClock;
 
   return (
-    <Badge className={cn("gap-1", styles[info.state])}>
-      <Icon className="h-3 w-3" />
-      {info.label}
+    <Badge
+      title={info.label}
+      className={cn(
+        "gap-0.5 px-1.5 py-0 text-[10px] font-medium leading-4",
+        styles[info.state]
+      )}
+    >
+      <Icon className="h-2.5 w-2.5" />
+      {info.shortLabel}
     </Badge>
   );
 }
