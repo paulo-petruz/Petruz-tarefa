@@ -2,7 +2,7 @@ import { CalendarCheck, CalendarClock, CalendarPlus, Pencil } from "lucide-react
 import { TASK_STATUSES } from "@/lib/constants";
 import type { Task, WorkspaceMember } from "@/lib/data";
 import { formatDateShort } from "@/lib/dates";
-import { canEditTask } from "@/lib/permissions";
+import { canDeleteTask, canEditTask } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -15,7 +15,7 @@ import { TaskDeleteButton } from "./task-delete-button";
 import { TaskDialog } from "./task-dialog";
 import { taskPercent } from "./task-progress";
 import { TaskStatusSelect } from "./task-status-select";
-import { toFormValues } from "./task-utils";
+import { initials, toFormValues } from "./task-utils";
 
 export function TaskBoard({
   tasks,
@@ -47,6 +47,7 @@ export function TaskBoard({
             <div className="flex flex-col gap-2">
               {columnTasks.map((task) => {
                 const editable = canEditTask(task, currentUserId, isAdmin);
+                const deletable = canDeleteTask(task, currentUserId, isAdmin);
                 const percent = taskPercent(
                   task.Status,
                   task.SubtaskCount,
@@ -80,10 +81,12 @@ export function TaskBoard({
                                 </Button>
                               }
                             />
-                            <TaskDeleteButton
-                              taskId={task.Id}
-                              taskTitle={task.Title}
-                            />
+                            {deletable && (
+                              <TaskDeleteButton
+                                taskId={task.Id}
+                                taskTitle={task.Title}
+                              />
+                            )}
                           </div>
                         )}
                       </div>
@@ -110,7 +113,31 @@ export function TaskBoard({
                         </span>
                       </div>
                       <div className="space-y-1 text-xs text-muted-foreground">
-                        <div>{task.AssigneeName ?? "Sem responsável"}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span>{task.AssigneeName ?? "Sem responsável"}</span>
+                          {task.Collaborators.length > 0 && (
+                            <span
+                              className="flex -space-x-1.5"
+                              title={task.Collaborators
+                                .map((c) => c.Name)
+                                .join(", ")}
+                            >
+                              {task.Collaborators.slice(0, 3).map((c) => (
+                                <span
+                                  key={c.UserId}
+                                  className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-foreground ring-1 ring-background"
+                                >
+                                  {initials(c.Name)}
+                                </span>
+                              ))}
+                              {task.Collaborators.length > 3 && (
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-foreground ring-1 ring-background">
+                                  +{task.Collaborators.length - 3}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           {task.StartDate && (
                             <span

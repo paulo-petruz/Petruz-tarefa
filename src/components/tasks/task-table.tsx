@@ -6,7 +6,7 @@ import type { Task, WorkspaceMember } from "@/lib/data";
 import { TASK_STATUSES } from "@/lib/constants";
 import { formatDateShort, getDueInfo } from "@/lib/dates";
 import { getMetaInfo } from "@/lib/meta";
-import { canEditTask } from "@/lib/permissions";
+import { canDeleteTask, canEditTask } from "@/lib/permissions";
 import { initials, toFormValues } from "./task-utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -196,6 +196,7 @@ export function TaskTable({
         <TableBody>
           {filteredTasks.map((task) => {
             const editable = canEditTask(task, currentUserId, isAdmin);
+            const deletable = canDeleteTask(task, currentUserId, isAdmin);
             const subtasks = subtasksByTask[task.Id] ?? [];
             const hasSubtasks = subtasks.length > 0;
             const isOpen = expanded.includes(task.Id);
@@ -284,16 +285,46 @@ export function TaskTable({
                     )}
                   </TableCell>
                   <TableCell className="py-3">
-                    {task.AssigneeName ? (
+                    {task.AssigneeName || task.Collaborators.length > 0 ? (
                       <div className="flex items-center gap-2">
-                        <Avatar className="h-7 w-7">
-                          <AvatarFallback className="bg-primary/15 text-[10px] font-semibold text-primary">
-                            {initials(task.AssigneeName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="hidden text-sm lg:inline">
-                          {task.AssigneeName}
-                        </span>
+                        <div className="flex -space-x-2">
+                          {task.AssigneeName && (
+                            <Avatar
+                              className="h-7 w-7 ring-2 ring-background"
+                              title={`${task.AssigneeName} (responsável)`}
+                            >
+                              <AvatarFallback className="bg-primary/15 text-[10px] font-semibold text-primary">
+                                {initials(task.AssigneeName)}
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                          {task.Collaborators.slice(0, 3).map((c) => (
+                            <Avatar
+                              key={c.UserId}
+                              className="h-7 w-7 ring-2 ring-background"
+                              title={`${c.Name} (compartilhada)`}
+                            >
+                              <AvatarFallback className="bg-muted text-[10px] font-semibold text-foreground">
+                                {initials(c.Name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          ))}
+                          {task.Collaborators.length > 3 && (
+                            <span
+                              className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold ring-2 ring-background"
+                              title={task.Collaborators
+                                .map((c) => c.Name)
+                                .join(", ")}
+                            >
+                              +{task.Collaborators.length - 3}
+                            </span>
+                          )}
+                        </div>
+                        {task.AssigneeName && (
+                          <span className="hidden text-sm lg:inline">
+                            {task.AssigneeName}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <span className="text-sm text-muted-foreground">—</span>
@@ -344,10 +375,12 @@ export function TaskTable({
                             </Button>
                           }
                         />
-                        <TaskDeleteButton
-                          taskId={task.Id}
-                          taskTitle={task.Title}
-                        />
+                        {deletable && (
+                          <TaskDeleteButton
+                            taskId={task.Id}
+                            taskTitle={task.Title}
+                          />
+                        )}
                       </div>
                     )}
                   </TableCell>

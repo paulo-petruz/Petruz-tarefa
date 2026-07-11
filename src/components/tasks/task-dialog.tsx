@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 
 export interface TaskFormValues {
   id: number;
@@ -45,6 +46,7 @@ export interface TaskFormValues {
   entry: number | null;
   metaType: string | null; // 'teto' | 'piso' | null
   metaValue: number | null;
+  collaboratorIds: number[];
 }
 
 function SubmitButton({
@@ -94,8 +96,8 @@ export function TaskDialog({
   trigger: ReactNode;
 }) {
   const isSubtask = entryId !== undefined && !task;
-  // Meta só existe em tarefa-mãe: some ao criar/editar subtarefa.
-  const showMeta = !isSubtask && !(task && task.entry != null);
+  // Meta e compartilhamento só existem em tarefa-mãe.
+  const isMotherTask = !isSubtask && !(task && task.entry != null);
   // Membros comuns só podem atribuir tarefas a si mesmos; mantém o
   // responsável atual visível em modo edição.
   const selectableMembers = isAdmin
@@ -105,6 +107,9 @@ export function TaskDialog({
       );
   const [open, setOpen] = useState(false);
   const [metaType, setMetaType] = useState<string>(task?.metaType ?? "none");
+  const [collabs, setCollabs] = useState<number[]>(
+    task?.collaboratorIds ?? []
+  );
   const action = task
     ? updateTaskAction.bind(null, task.id)
     : createTaskAction;
@@ -223,6 +228,49 @@ export function TaskDialog({
               </SelectContent>
             </Select>
           </div>
+          {isMotherTask && members.length > 1 && (
+            <div className="space-y-2">
+              <Label>Compartilhar com</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {members.map((m) => {
+                  const selected = collabs.includes(m.UserId);
+                  return (
+                    <button
+                      key={m.UserId}
+                      type="button"
+                      onClick={() =>
+                        setCollabs((prev) =>
+                          selected
+                            ? prev.filter((id) => id !== m.UserId)
+                            : [...prev, m.UserId]
+                        )
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      {m.Name}
+                    </button>
+                  );
+                })}
+              </div>
+              {collabs.map((id) => (
+                <input
+                  key={id}
+                  type="hidden"
+                  name="collaborators"
+                  value={id}
+                />
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Quem for marcado também vê e edita a tarefa, e ela aparece na
+                pasta dele. O responsável não precisa ser marcado.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="task-start">Início</Label>
@@ -282,7 +330,7 @@ export function TaskDialog({
                 : "Digite quanto da tarefa já foi concluído (0 a 100)."}
             </p>
           </div>
-          {showMeta && (
+          {isMotherTask && (
             <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

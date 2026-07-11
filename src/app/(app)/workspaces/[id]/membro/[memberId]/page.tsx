@@ -53,7 +53,10 @@ export default async function MemberFolderPage({
   if (memberId !== 0 && !member) notFound();
 
   const tasks = allTasks.filter((t) =>
-    member ? t.AssigneeId === member.UserId : t.AssigneeId === null
+    member
+      ? t.AssigneeId === member.UserId ||
+        t.Collaborators.some((c) => c.UserId === member.UserId)
+      : t.AssigneeId === null
   );
   const taskIds = new Set(tasks.map((t) => t.Id));
   const subtasksByTask = allSubtasks

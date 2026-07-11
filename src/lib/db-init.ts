@@ -75,6 +75,17 @@ const DDL_STATEMENTS: string[] = [
   `IF COL_LENGTH('dbo.Tasks', 'MetaValue') IS NULL
    ALTER TABLE dbo.Tasks ADD MetaValue INT NULL`,
 
+  // Tarefas compartilhadas: usuários vinculados além do responsável
+  `IF OBJECT_ID('dbo.TaskCollaborators', 'U') IS NULL
+   CREATE TABLE dbo.TaskCollaborators (
+     TaskId INT NOT NULL REFERENCES dbo.Tasks(Id) ON DELETE CASCADE,
+     UserId INT NOT NULL REFERENCES dbo.Users(Id),
+     CONSTRAINT PK_TaskCollaborators PRIMARY KEY (TaskId, UserId)
+   )`,
+
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TaskCollaborators_UserId')
+   CREATE INDEX IX_TaskCollaborators_UserId ON dbo.TaskCollaborators (UserId)`,
+
   `IF OBJECT_ID('dbo.Subtasks', 'U') IS NULL
    CREATE TABLE dbo.Subtasks (
      Id INT IDENTITY(1,1) PRIMARY KEY,

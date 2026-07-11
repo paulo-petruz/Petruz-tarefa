@@ -2,7 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { getPool, sql } from "./db";
 import { getSession, type SessionUser } from "./auth";
-import { canEditTask } from "./permissions";
+import { canDeleteTask, canEditTask } from "./permissions";
 
 /**
  * Políticas de autorização:
@@ -101,7 +101,12 @@ export async function assertWorkspaceMember(
  * a tarefa não tem responsável).
  */
 export async function assertCanEditTask(
-  task: { WorkspaceId: number; AssigneeId: number | null; CreatedById: number },
+  task: {
+    WorkspaceId: number;
+    AssigneeId: number | null;
+    CreatedById: number;
+    Collaborators?: { UserId: number }[];
+  },
   user: SessionUser
 ): Promise<void> {
   const role = await getWorkspaceRole(task.WorkspaceId, user.id);
@@ -110,5 +115,19 @@ export async function assertCanEditTask(
   }
   if (!canEditTask(task, user.id, role === "admin")) {
     throw new Error("Apenas o responsável pela tarefa pode alterá-la.");
+  }
+}
+
+/** Como assertCanEditTask, mas para exclusão (colaboradores não excluem). */
+export async function assertCanDeleteTask(
+  task: { WorkspaceId: number; AssigneeId: number | null; CreatedById: number },
+  user: SessionUser
+): Promise<void> {
+  const role = await getWorkspaceRole(task.WorkspaceId, user.id);
+  if (!role) {
+    throw new Error("Você não tem acesso a este espaço de trabalho.");
+  }
+  if (!canDeleteTask(task, user.id, role === "admin")) {
+    throw new Error("Apenas o responsável pode excluir esta tarefa.");
   }
 }

@@ -10,6 +10,7 @@ import {
   verifyPassword,
 } from "./auth";
 import {
+  assertCanDeleteTask,
   assertCanEditTask,
   assertSuperAdmin,
   assertWorkspaceAdmin,
@@ -315,6 +316,8 @@ const taskSchema = z
       .int()
       .positive("A meta deve ser um número maior que zero.")
       .optional(),
+    // Usuários vinculados (compartilhamento) — só na tarefa-mãe.
+    collaborators: z.array(z.coerce.number().int().positive()).optional(),
   })
   .refine(
     (t) => !t.startDate || !t.dueDate || t.startDate <= t.dueDate,
@@ -345,7 +348,26 @@ function parseTaskForm(formData: FormData) {
     entry: formData.get("entry") || undefined,
     metaType: parseMetaType(formData.get("metaType")),
     metaValue: formData.get("metaValue") || undefined,
+    collaborators: formData.getAll("collaborators"),
   });
+}
+
+/**
+ * Restringe os colaboradores aos membros do espaço, remove o próprio
+ * responsável (para não duplicar) e deduplica.
+ */
+async function resolveCollaborators(
+  workspaceId: number,
+  assigneeId: number | null,
+  collaborators: number[] | undefined
+): Promise<number[]> {
+  if (!collaborators || collaborators.length === 0) return [];
+  const memberIds = new Set(
+    (await data.listWorkspaceMembers(workspaceId)).map((m) => m.UserId)
+  );
+  return Array.from(new Set(collaborators)).filter(
+    (id) => memberIds.has(id) && id !== assigneeId
+  );
 }
 
 export async function createTaskAction(
@@ -371,7 +393,7 @@ export async function createTaskAction(
         error: "Apenas admins podem criar tarefas para outra pessoa.",
       };
     }
-    await data.createTask(
+    const newTaskId = await data.createTask(
       {
         workspaceId: parsed.data.workspaceId,
         title: parsed.data.title,
@@ -389,6 +411,15 @@ export async function createTaskAction(
       },
       user.id
     );
+    // Compartilhamento só em tarefa-mãe.
+    if (!parsed.data.entry) {
+      const collaborators = await resolveCollaborators(
+        parsed.data.workspaceId,
+        parsed.data.assigneeId ?? null,
+        parsed.data.collaborators
+      );
+      await data.setTaskCollaborators(newTaskId, collaborators);
+    }
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : "Erro ao criar a tarefa.",
@@ -438,6 +469,15 @@ export async function updateTaskAction(
       metaType: task.Entry != null ? null : (parsed.data.metaType ?? null),
       metaValue: task.Entry != null ? null : (parsed.data.metaValue ?? null),
     });
+    // Compartilhamento só em tarefa-mãe.
+    if (task.Entry == null) {
+      const collaborators = await resolveCollaborators(
+        task.WorkspaceId,
+        parsed.data.assigneeId ?? null,
+        parsed.data.collaborators
+      );
+      await data.setTaskCollaborators(taskId, collaborators);
+    }
     revalidatePath(`/workspaces/${task.WorkspaceId}`);
   } catch (err) {
     return {
@@ -498,7 +538,7 @@ export async function deleteTaskAction(taskId: number): Promise<ActionState> {
   try {
     const task = await data.getTask(taskId);
     if (!task) return { error: "Tarefa não encontrada." };
-    await assertCanEditTask(task, user);
+    await assertCanDeleteTask(task, user);
     await data.deleteTask(taskId);
     revalidatePath(`/workspaces/${task.WorkspaceId}`);
   } catch (err) {

@@ -27,6 +27,7 @@ export function toFormValues(task: Task): TaskFormValues {
     entry: task.Entry ?? null,
     metaType: task.MetaType,
     metaValue: task.MetaValue,
+    collaboratorIds: task.Collaborators.map((c) => c.UserId),
   };
 }
 

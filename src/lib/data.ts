@@ -48,6 +48,18 @@ export interface Task {
   CreatedAt: Date;
   SubtaskCount: number;
   SubtaskDone: number;
+  /** Usuários vinculados além do responsável (compartilhamento). */
+  Collaborators: { UserId: number; Name: string }[];
+}
+
+/** Converte a coluna CollaboratorsJson (FOR JSON) no array Collaborators. */
+function mapTask(row: Record<string, unknown>): Task {
+  const { CollaboratorsJson, ...rest } = row;
+  return {
+    ...(rest as unknown as Task),
+    Collaborators:
+      typeof CollaboratorsJson === "string" ? JSON.parse(CollaboratorsJson) : [],
+  };
 }
 
 // ---------- Usuários ----------
@@ -262,7 +274,11 @@ const TASK_SELECT = `
          t.AssigneeId, a.Name AS AssigneeName, t.CreatedById,
          t.StartDate, t.DueDate, t.CompletedDate, t.Progress, t.MetaType, t.MetaValue, t.CreatedAt, w.Name AS WorkspaceName,
     (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id) AS SubtaskCount,
-    (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id AND s.Status = 'done') AS SubtaskDone
+    (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id AND s.Status = 'done') AS SubtaskDone,
+    (SELECT u.Id AS UserId, u.Name
+       FROM dbo.TaskCollaborators tc JOIN dbo.Users u ON u.Id = tc.UserId
+       WHERE tc.TaskId = t.Id
+       FOR JSON PATH) AS CollaboratorsJson
   FROM dbo.Tasks t
   LEFT JOIN dbo.Users a ON a.Id = t.AssigneeId
   JOIN dbo.Workspaces w ON w.Id = t.WorkspaceId`;
@@ -279,7 +295,7 @@ export async function listTasksByWorkspace(
        WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL
        ORDER BY CASE WHEN t.DueDate IS NULL THEN 1 ELSE 0 END, t.DueDate, t.Id DESC`
     );
-  return result.recordset;
+  return result.recordset.map(mapTask);
 }
 
 export async function getTask(id: number): Promise<Task | null> {
@@ -288,7 +304,8 @@ export async function getTask(id: number): Promise<Task | null> {
     .request()
     .input("id", sql.Int, id)
     .query(`${TASK_SELECT} WHERE t.Id = @id`);
-  return result.recordset[0] ?? null;
+  const row = result.recordset[0];
+  return row ? mapTask(row) : null;
 }
 
 export interface TaskInput {
@@ -308,9 +325,9 @@ export interface TaskInput {
 export async function createTask(
   input: TaskInput,
   createdById: number
-): Promise<void> {
+): Promise<number> {
   const pool = await getPool();
-  await pool
+  const result = await pool
     .request()
     .input("workspaceId", sql.Int, input.workspaceId)
     .input("title", sql.NVarChar(200), input.title.trim())
@@ -327,10 +344,41 @@ export async function createTask(
     .input("createdById", sql.Int, createdById)
     .query(
       `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, CompletedDate, Progress, MetaType, MetaValue, CreatedById)
+       OUTPUT INSERTED.Id
        VALUES (@workspaceId, @title, @description, @status, @priority, @entry, @assigneeId, @startDate, @dueDate,
                CASE WHEN @status = 'done' THEN CAST(GETDATE() AS DATE) ELSE NULL END,
                @progress, @metaType, @metaValue, @createdById)`
     );
+  return result.recordset[0].Id;
+}
+
+/** Substitui a lista de colaboradores (usuários vinculados) de uma tarefa. */
+export async function setTaskCollaborators(
+  taskId: number,
+  userIds: number[]
+): Promise<void> {
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    await tx
+      .request()
+      .input("taskId", sql.Int, taskId)
+      .query("DELETE FROM dbo.TaskCollaborators WHERE TaskId = @taskId");
+    for (const userId of userIds) {
+      await tx
+        .request()
+        .input("taskId", sql.Int, taskId)
+        .input("userId", sql.Int, userId)
+        .query(
+          "INSERT INTO dbo.TaskCollaborators (TaskId, UserId) VALUES (@taskId, @userId)"
+        );
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
 }
 
 export async function updateTask(id: number, input: TaskInput): Promise<void> {
@@ -419,7 +467,7 @@ export async function listSubtasksByWorkspace(
        WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NOT NULL
        ORDER BY t.Id DESC`
     );
-  return result.recordset;
+  return result.recordset.map(mapTask);
 }
 
 // ---------- Painel (dashboard) ----------
@@ -466,5 +514,5 @@ export async function getDueAlertsForUser(
          AND t.DueDate <= DATEADD(day, @days, CAST(GETDATE() AS DATE))
        ORDER BY t.DueDate`
     );
-  return result.recordset;
+  return result.recordset.map(mapTask);
 }
