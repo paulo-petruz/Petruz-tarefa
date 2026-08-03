@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { DueBadge } from "./due-badge";
-import { MetaBadge } from "./meta-badge";
 import { PriorityBadge } from "./priority-badge";
 import { SubtaskOverdueBadge } from "./subtask-overdue-badge";
 import { StatusBadge } from "./status-badge";
@@ -93,12 +92,6 @@ export function TaskBoard({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <PriorityBadge priority={task.Priority} />
                         <DueBadge dueDate={task.DueDate} status={task.Status} />
-                        <MetaBadge
-                          metaType={task.MetaType}
-                          metaValue={task.MetaValue}
-                          subtaskCount={task.SubtaskCount}
-                          subtaskDone={task.SubtaskDone}
-                        />
                         <SubtaskOverdueBadge
                           subtasks={subtasksByTask[task.Id] ?? []}
                           compact

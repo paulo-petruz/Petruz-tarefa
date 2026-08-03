@@ -309,30 +309,13 @@ const taskSchema = z
       .optional(),
     // Id da tarefa-mãe quando se cria uma subtarefa.
     entry: z.coerce.number().int().positive().optional(),
-    // Meta de subtarefas em aberto (só na tarefa-mãe).
-    metaType: z.enum(["teto", "piso"]).optional(),
-    metaValue: z.coerce
-      .number()
-      .int()
-      .positive("A meta deve ser um número maior que zero.")
-      .optional(),
     // Usuários vinculados (compartilhamento) — só na tarefa-mãe.
     collaborators: z.array(z.coerce.number().int().positive()).optional(),
   })
   .refine(
     (t) => !t.startDate || !t.dueDate || t.startDate <= t.dueDate,
     { message: "A data de início não pode ser depois do vencimento." }
-  )
-  .refine((t) => !t.metaType || t.metaValue !== undefined, {
-    message: "Informe a quantidade da meta.",
-    path: ["metaValue"],
-  });
-
-function parseMetaType(
-  value: FormDataEntryValue | null
-): "teto" | "piso" | undefined {
-  return value === "teto" || value === "piso" ? value : undefined;
-}
+  );
 
 function parseTaskForm(formData: FormData) {
   return taskSchema.safeParse({
@@ -346,8 +329,6 @@ function parseTaskForm(formData: FormData) {
     dueDate: formData.get("dueDate") || undefined,
     progress: formData.get("progress") || undefined,
     entry: formData.get("entry") || undefined,
-    metaType: parseMetaType(formData.get("metaType")),
-    metaValue: formData.get("metaValue") || undefined,
     collaborators: formData.getAll("collaborators"),
   });
 }
@@ -405,9 +386,6 @@ export async function createTaskAction(
         dueDate: parsed.data.dueDate ?? null,
         progress: parsed.data.progress ?? 0,
         entry: parsed.data.entry ?? null,
-        // Meta só vale para tarefa-mãe (subtarefa não carrega meta).
-        metaType: parsed.data.entry ? null : (parsed.data.metaType ?? null),
-        metaValue: parsed.data.entry ? null : (parsed.data.metaValue ?? null),
       },
       user.id
     );
@@ -465,9 +443,6 @@ export async function updateTaskAction(
       startDate: parsed.data.startDate ?? null,
       dueDate: parsed.data.dueDate ?? null,
       progress: parsed.data.progress ?? task.Progress,
-      // Meta só vale para tarefa-mãe (subtarefa não carrega meta).
-      metaType: task.Entry != null ? null : (parsed.data.metaType ?? null),
-      metaValue: task.Entry != null ? null : (parsed.data.metaValue ?? null),
     });
     // Compartilhamento só em tarefa-mãe.
     if (task.Entry == null) {

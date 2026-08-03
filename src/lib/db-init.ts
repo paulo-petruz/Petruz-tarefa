@@ -49,8 +49,6 @@ const DDL_STATEMENTS: string[] = [
      DueDate DATE NULL,
      CompletedDate DATE NULL,
      Progress INT NOT NULL DEFAULT 0,
-     MetaType NVARCHAR(10) NULL,
-     MetaValue INT NULL,
      CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
      UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
    )`,
@@ -67,13 +65,6 @@ const DDL_STATEMENTS: string[] = [
   `UPDATE dbo.Tasks
    SET CompletedDate = CAST(UpdatedAt AS DATE)
    WHERE Status = 'done' AND CompletedDate IS NULL`,
-
-  // Meta de subtarefas em aberto para tarefas recorrentes (teto/piso)
-  `IF COL_LENGTH('dbo.Tasks', 'MetaType') IS NULL
-   ALTER TABLE dbo.Tasks ADD MetaType NVARCHAR(10) NULL`,
-
-  `IF COL_LENGTH('dbo.Tasks', 'MetaValue') IS NULL
-   ALTER TABLE dbo.Tasks ADD MetaValue INT NULL`,
 
   // Tarefas compartilhadas: usuários vinculados além do responsável
   `IF OBJECT_ID('dbo.TaskCollaborators', 'U') IS NULL
