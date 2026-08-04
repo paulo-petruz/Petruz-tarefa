@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 export interface TaskFormValues {
@@ -45,6 +46,9 @@ export interface TaskFormValues {
   progress: number;
   entry: number | null;
   collaboratorIds: number[];
+  metaType: string | null; // 'teto' | 'piso' | null
+  metaValue: number | null;
+  standardMinutes: number | null;
 }
 
 function SubmitButton({
@@ -107,6 +111,8 @@ export function TaskDialog({
   const [collabs, setCollabs] = useState<number[]>(
     task?.collaboratorIds ?? []
   );
+  const [metaType, setMetaType] = useState<string>(task?.metaType ?? "none");
+  const [measure, setMeasure] = useState(task?.standardMinutes != null);
   const action = task
     ? updateTaskAction.bind(null, task.id)
     : createTaskAction;
@@ -327,6 +333,75 @@ export function TaskDialog({
                 : "Digite quanto da tarefa já foi concluído (0 a 100)."}
             </p>
           </div>
+          {isMotherTask && (
+            <>
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Meta de subtarefas em aberto</Label>
+                    <Select
+                      name="metaType"
+                      value={metaType}
+                      onValueChange={setMetaType}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem meta</SelectItem>
+                        <SelectItem value="teto">Teto (máximo)</SelectItem>
+                        <SelectItem value="piso">Piso (mínimo)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="task-meta-value">Quantidade</Label>
+                    <Input
+                      id="task-meta-value"
+                      name="metaValue"
+                      type="number"
+                      min={1}
+                      defaultValue={task?.metaValue ?? ""}
+                      disabled={metaType === "none"}
+                      placeholder="Ex.: 10"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {metaType === "teto"
+                    ? "Fica fora da meta quando houver mais subtarefas em aberto que o teto."
+                    : metaType === "piso"
+                      ? "Fica fora da meta quando houver menos subtarefas em aberto que o piso."
+                      : "Defina um teto (máximo) ou piso (mínimo) de subtarefas em aberto."}
+                </p>
+              </div>
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Checkbox
+                    checked={measure}
+                    onCheckedChange={(v) => setMeasure(v === true)}
+                  />
+                  Medir em produção
+                </label>
+                {measure && (
+                  <Input
+                    name="standardMinutes"
+                    type="number"
+                    min={0}
+                    step="any"
+                    required
+                    defaultValue={task?.standardMinutes ?? ""}
+                    placeholder="Tempo-padrão por unidade, em minutos (ex.: 5)"
+                  />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Registre a produção por lote (quantidade + tempo) na própria
+                  tarefa. Quando o ritmo ultrapassar o tempo-padrão, ela entra em
+                  “Fora da meta”.
+                </p>
+              </div>
+            </>
+          )}
           <SubmitButton isEdit={Boolean(task)} isSubtask={isSubtask} />
         </form>
       </DialogContent>

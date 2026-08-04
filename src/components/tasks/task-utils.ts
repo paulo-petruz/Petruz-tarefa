@@ -26,6 +26,10 @@ export function toFormValues(task: Task): TaskFormValues {
     progress: task.Progress,
     entry: task.Entry ?? null,
     collaboratorIds: task.Collaborators.map((c) => c.UserId),
+    metaType: task.MetaType,
+    metaValue: task.MetaValue,
+    standardMinutes:
+      task.StandardSeconds != null ? task.StandardSeconds / 60 : null,
   };
 }
 

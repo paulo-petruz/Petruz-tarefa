@@ -311,11 +311,30 @@ const taskSchema = z
     entry: z.coerce.number().int().positive().optional(),
     // Usuários vinculados (compartilhamento) — só na tarefa-mãe.
     collaborators: z.array(z.coerce.number().int().positive()).optional(),
+    // Meta de subtarefas em aberto (teto/piso) — só na tarefa-mãe.
+    metaType: z.enum(["teto", "piso"]).optional(),
+    metaValue: z.coerce
+      .number()
+      .int()
+      .positive("A meta deve ser um número maior que zero.")
+      .optional(),
+    // Medição por produção: tempo-padrão por unidade (em minutos).
+    standardMinutes: z.coerce.number().positive().max(1440).optional(),
   })
   .refine(
     (t) => !t.startDate || !t.dueDate || t.startDate <= t.dueDate,
     { message: "A data de início não pode ser depois do vencimento." }
-  );
+  )
+  .refine((t) => !t.metaType || t.metaValue !== undefined, {
+    message: "Informe a quantidade da meta.",
+    path: ["metaValue"],
+  });
+
+function parseMetaType(
+  value: FormDataEntryValue | null
+): "teto" | "piso" | undefined {
+  return value === "teto" || value === "piso" ? value : undefined;
+}
 
 function parseTaskForm(formData: FormData) {
   return taskSchema.safeParse({
@@ -330,6 +349,9 @@ function parseTaskForm(formData: FormData) {
     progress: formData.get("progress") || undefined,
     entry: formData.get("entry") || undefined,
     collaborators: formData.getAll("collaborators"),
+    metaType: parseMetaType(formData.get("metaType")),
+    metaValue: formData.get("metaValue") || undefined,
+    standardMinutes: formData.get("standardMinutes") || undefined,
   });
 }
 
@@ -386,6 +408,13 @@ export async function createTaskAction(
         dueDate: parsed.data.dueDate ?? null,
         progress: parsed.data.progress ?? 0,
         entry: parsed.data.entry ?? null,
+        // Meta e produção só valem para tarefa-mãe.
+        metaType: parsed.data.entry ? null : (parsed.data.metaType ?? null),
+        metaValue: parsed.data.entry ? null : (parsed.data.metaValue ?? null),
+        standardSeconds:
+          parsed.data.entry || parsed.data.standardMinutes == null
+            ? null
+            : Math.round(parsed.data.standardMinutes * 60),
       },
       user.id
     );
@@ -443,6 +472,13 @@ export async function updateTaskAction(
       startDate: parsed.data.startDate ?? null,
       dueDate: parsed.data.dueDate ?? null,
       progress: parsed.data.progress ?? task.Progress,
+      // Meta e produção só valem para tarefa-mãe.
+      metaType: task.Entry != null ? null : (parsed.data.metaType ?? null),
+      metaValue: task.Entry != null ? null : (parsed.data.metaValue ?? null),
+      standardSeconds:
+        task.Entry != null || parsed.data.standardMinutes == null
+          ? null
+          : Math.round(parsed.data.standardMinutes * 60),
     });
     // Compartilhamento só em tarefa-mãe.
     if (task.Entry == null) {
@@ -461,6 +497,80 @@ export async function updateTaskAction(
   }
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+// ---------- Apontamentos de produção ----------
+
+export async function registerProductionAction(
+  taskId: number,
+  quantity: number,
+  minutes: number,
+  note: string
+): Promise<ActionState> {
+  const user = await requireUser();
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return { error: "A quantidade deve ser um inteiro maior que zero." };
+  }
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return { error: "O tempo do lote deve ser maior que zero." };
+  }
+  try {
+    const task = await data.getTask(taskId);
+    if (!task) return { error: "Tarefa não encontrada." };
+    if (!task.StandardSeconds) {
+      return { error: "Esta tarefa não mede produção." };
+    }
+    await assertCanEditTask(task, user);
+    await data.addProductionLog(
+      taskId,
+      user.id,
+      quantity,
+      Math.round(minutes * 60),
+      note.trim() || null
+    );
+    revalidatePath(`/workspaces/${task.WorkspaceId}`);
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Erro ao registrar produção.",
+    };
+  }
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function deleteProductionLogAction(
+  logId: number,
+  taskId: number
+): Promise<ActionState> {
+  const user = await requireUser();
+  try {
+    const task = await data.getTask(taskId);
+    if (!task) return { error: "Tarefa não encontrada." };
+    await assertCanEditTask(task, user);
+    await data.deleteProductionLog(logId, taskId);
+    revalidatePath(`/workspaces/${task.WorkspaceId}`);
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Erro ao excluir lançamento.",
+    };
+  }
+  return { success: true };
+}
+
+export async function listProductionLogAction(
+  taskId: number
+): Promise<{ entries?: data.ProductionLogEntry[]; error?: string }> {
+  const user = await requireUser();
+  try {
+    const task = await data.getTask(taskId);
+    if (!task) return { error: "Tarefa não encontrada." };
+    await assertCanEditTask(task, user);
+    return { entries: await data.listProductionLog(taskId) };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Erro ao carregar lançamentos.",
+    };
+  }
 }
 
 export async function updateTaskStatusAction(

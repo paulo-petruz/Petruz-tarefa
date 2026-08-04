@@ -46,6 +46,14 @@ export interface Task {
   CreatedAt: Date;
   SubtaskCount: number;
   SubtaskDone: number;
+  /** Meta de subtarefas em aberto (teto/piso); null = sem meta. */
+  MetaType: string | null;
+  MetaValue: number | null;
+  /** Tempo-padrão por unidade em segundos (null = não mensurável). */
+  StandardSeconds: number | null;
+  /** Totais apontados (0 quando não há apontamentos). */
+  ProdQty: number;
+  ProdSeconds: number;
   /** Usuários vinculados além do responsável (compartilhamento). */
   Collaborators: { UserId: number; Name: string }[];
 }
@@ -270,9 +278,12 @@ const TASK_SELECT = `
   SELECT t.Id, t.WorkspaceId, t.Title, t.Description, t.Status, t.Priority,
     t.Entry,
          t.AssigneeId, a.Name AS AssigneeName, t.CreatedById,
-         t.StartDate, t.DueDate, t.CompletedDate, t.Progress, t.CreatedAt, w.Name AS WorkspaceName,
+         t.StartDate, t.DueDate, t.CompletedDate, t.Progress,
+         t.MetaType, t.MetaValue, t.StandardSeconds, t.CreatedAt, w.Name AS WorkspaceName,
     (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id) AS SubtaskCount,
     (SELECT COUNT(*) FROM dbo.Tasks s WHERE s.Entry = t.Id AND s.Status = 'done') AS SubtaskDone,
+    COALESCE((SELECT SUM(pl.Quantity) FROM dbo.TaskProductionLog pl WHERE pl.TaskId = t.Id), 0) AS ProdQty,
+    COALESCE((SELECT SUM(pl.DurationSeconds) FROM dbo.TaskProductionLog pl WHERE pl.TaskId = t.Id), 0) AS ProdSeconds,
     (SELECT u.Id AS UserId, u.Name
        FROM dbo.TaskCollaborators tc JOIN dbo.Users u ON u.Id = tc.UserId
        WHERE tc.TaskId = t.Id
@@ -317,6 +328,9 @@ export interface TaskInput {
   dueDate: string | null;
   progress: number;
   entry?: number | null;
+  metaType?: string | null;
+  metaValue?: number | null;
+  standardSeconds?: number | null;
 }
 export async function createTask(
   input: TaskInput,
@@ -335,13 +349,16 @@ export async function createTask(
     .input("startDate", sql.Date, input.startDate)
     .input("dueDate", sql.Date, input.dueDate)
     .input("progress", sql.Int, input.progress)
+    .input("metaType", sql.NVarChar(10), input.metaType ?? null)
+    .input("metaValue", sql.Int, input.metaValue ?? null)
+    .input("standardSeconds", sql.Int, input.standardSeconds ?? null)
     .input("createdById", sql.Int, createdById)
     .query(
-      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, CompletedDate, Progress, CreatedById)
+      `INSERT INTO dbo.Tasks (WorkspaceId, Title, Description, Status, Priority, Entry, AssigneeId, StartDate, DueDate, CompletedDate, Progress, MetaType, MetaValue, StandardSeconds, CreatedById)
        OUTPUT INSERTED.Id
        VALUES (@workspaceId, @title, @description, @status, @priority, @entry, @assigneeId, @startDate, @dueDate,
                CASE WHEN @status = 'done' THEN CAST(GETDATE() AS DATE) ELSE NULL END,
-               @progress, @createdById)`
+               @progress, @metaType, @metaValue, @standardSeconds, @createdById)`
     );
   return result.recordset[0].Id;
 }
@@ -375,6 +392,75 @@ export async function setTaskCollaborators(
   }
 }
 
+// ---------- Apontamentos de produção (tarefa mensurável) ----------
+
+export interface ProductionLogEntry {
+  Id: number;
+  TaskId: number;
+  UserId: number;
+  UserName: string;
+  Quantity: number;
+  DurationSeconds: number;
+  Note: string | null;
+  LoggedAt: Date;
+}
+
+/** Lançamentos de produção de uma tarefa, do mais recente ao mais antigo. */
+export async function listProductionLog(
+  taskId: number
+): Promise<ProductionLogEntry[]> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("taskId", sql.Int, taskId)
+    .query(
+      `SELECT pl.Id, pl.TaskId, pl.UserId, u.Name AS UserName,
+              pl.Quantity, pl.DurationSeconds, pl.Note, pl.LoggedAt
+       FROM dbo.TaskProductionLog pl
+       JOIN dbo.Users u ON u.Id = pl.UserId
+       WHERE pl.TaskId = @taskId
+       ORDER BY pl.Id DESC`
+    );
+  return result.recordset;
+}
+
+/** Registra um lote produzido (quantidade + tempo gasto). */
+export async function addProductionLog(
+  taskId: number,
+  userId: number,
+  quantity: number,
+  durationSeconds: number,
+  note: string | null
+): Promise<void> {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input("taskId", sql.Int, taskId)
+    .input("userId", sql.Int, userId)
+    .input("quantity", sql.Int, quantity)
+    .input("durationSeconds", sql.Int, durationSeconds)
+    .input("note", sql.NVarChar(200), note)
+    .query(
+      `INSERT INTO dbo.TaskProductionLog (TaskId, UserId, Quantity, DurationSeconds, Note)
+       VALUES (@taskId, @userId, @quantity, @durationSeconds, @note)`
+    );
+}
+
+/** Remove um lançamento (restrito à tarefa informada, validada na action). */
+export async function deleteProductionLog(
+  id: number,
+  taskId: number
+): Promise<void> {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input("id", sql.Int, id)
+    .input("taskId", sql.Int, taskId)
+    .query(
+      "DELETE FROM dbo.TaskProductionLog WHERE Id = @id AND TaskId = @taskId"
+    );
+}
+
 export async function updateTask(id: number, input: TaskInput): Promise<void> {
   const pool = await getPool();
   // Início e vencimento são imutáveis após a criação: não entram no UPDATE.
@@ -388,10 +474,15 @@ export async function updateTask(id: number, input: TaskInput): Promise<void> {
     .input("priority", sql.NVarChar(10), input.priority)
     .input("assigneeId", sql.Int, input.assigneeId)
     .input("progress", sql.Int, input.progress)
+    .input("metaType", sql.NVarChar(10), input.metaType ?? null)
+    .input("metaValue", sql.Int, input.metaValue ?? null)
+    .input("standardSeconds", sql.Int, input.standardSeconds ?? null)
     .query(
       `UPDATE dbo.Tasks
        SET Title = @title, Description = @description, Status = @status,
            Priority = @priority, AssigneeId = @assigneeId, Progress = @progress,
+           MetaType = @metaType, MetaValue = @metaValue,
+           StandardSeconds = @standardSeconds,
            CompletedDate = CASE WHEN @status = 'done'
                                 THEN COALESCE(CompletedDate, CAST(GETDATE() AS DATE))
                                 ELSE NULL END,

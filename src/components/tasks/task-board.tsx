@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { DueBadge } from "./due-badge";
+import { MetaBadge } from "./meta-badge";
 import { PriorityBadge } from "./priority-badge";
 import { SubtaskOverdueBadge } from "./subtask-overdue-badge";
+import { TaskProductionButton } from "./task-production-button";
 import { StatusBadge } from "./status-badge";
 import { TaskDeleteButton } from "./task-delete-button";
 import { TaskDialog } from "./task-dialog";
@@ -92,10 +94,25 @@ export function TaskBoard({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <PriorityBadge priority={task.Priority} />
                         <DueBadge dueDate={task.DueDate} status={task.Status} />
+                        <MetaBadge
+                          metaType={task.MetaType}
+                          metaValue={task.MetaValue}
+                          subtaskCount={task.SubtaskCount}
+                          subtaskDone={task.SubtaskDone}
+                        />
                         <SubtaskOverdueBadge
                           subtasks={subtasksByTask[task.Id] ?? []}
                           compact
                         />
+                        {task.StandardSeconds != null && (
+                          <TaskProductionButton
+                            taskId={task.Id}
+                            standardSeconds={task.StandardSeconds}
+                            prodQty={task.ProdQty}
+                            prodSeconds={task.ProdSeconds}
+                            editable={editable}
+                          />
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Progress value={percent} className="h-1.5" />

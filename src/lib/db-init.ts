@@ -49,6 +49,9 @@ const DDL_STATEMENTS: string[] = [
      DueDate DATE NULL,
      CompletedDate DATE NULL,
      Progress INT NOT NULL DEFAULT 0,
+     MetaType NVARCHAR(10) NULL,
+     MetaValue INT NULL,
+     StandardSeconds INT NULL,
      CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
      UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
    )`,
@@ -65,6 +68,32 @@ const DDL_STATEMENTS: string[] = [
   `UPDATE dbo.Tasks
    SET CompletedDate = CAST(UpdatedAt AS DATE)
    WHERE Status = 'done' AND CompletedDate IS NULL`,
+
+  // Meta de subtarefas em aberto para tarefas recorrentes (teto/piso)
+  `IF COL_LENGTH('dbo.Tasks', 'MetaType') IS NULL
+   ALTER TABLE dbo.Tasks ADD MetaType NVARCHAR(10) NULL`,
+
+  `IF COL_LENGTH('dbo.Tasks', 'MetaValue') IS NULL
+   ALTER TABLE dbo.Tasks ADD MetaValue INT NULL`,
+
+  // Tarefa mensurável por produção: tempo-padrão por unidade (em segundos)
+  `IF COL_LENGTH('dbo.Tasks', 'StandardSeconds') IS NULL
+   ALTER TABLE dbo.Tasks ADD StandardSeconds INT NULL`,
+
+  // Apontamentos de produção por lote (quantidade + tempo)
+  `IF OBJECT_ID('dbo.TaskProductionLog', 'U') IS NULL
+   CREATE TABLE dbo.TaskProductionLog (
+     Id INT IDENTITY(1,1) PRIMARY KEY,
+     TaskId INT NOT NULL REFERENCES dbo.Tasks(Id) ON DELETE CASCADE,
+     UserId INT NOT NULL REFERENCES dbo.Users(Id),
+     Quantity INT NOT NULL,
+     DurationSeconds INT NOT NULL,
+     Note NVARCHAR(200) NULL,
+     LoggedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+   )`,
+
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TaskProductionLog_TaskId')
+   CREATE INDEX IX_TaskProductionLog_TaskId ON dbo.TaskProductionLog (TaskId)`,
 
   // Tarefas compartilhadas: usuários vinculados além do responsável
   `IF OBJECT_ID('dbo.TaskCollaborators', 'U') IS NULL
