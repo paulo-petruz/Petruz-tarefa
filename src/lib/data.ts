@@ -598,3 +598,47 @@ export async function getDueAlertsForUser(
     );
   return result.recordset.map(mapTask);
 }
+
+export interface DueNotificationRow {
+  UserId: number;
+  Name: string;
+  Email: string;
+  TaskId: number;
+  Title: string;
+  DueDate: Date;
+  Status: string;
+  WorkspaceName: string;
+}
+
+/**
+ * Para envio de e-mails: cada linha é um par (usuário vinculado, tarefa) cuja
+ * previsão está vencida ou vence nos próximos @days dias. Usuário vinculado =
+ * responsável OU colaborador da tarefa.
+ */
+export async function getDueTaskNotifications(
+  days: number
+): Promise<DueNotificationRow[]> {
+  const pool = await getPool();
+  const result = await pool.request().input("days", sql.Int, days).query(
+    `SELECT u.Id AS UserId, u.Name, u.Email, t.Id AS TaskId, t.Title,
+            t.DueDate, t.Status, w.Name AS WorkspaceName
+     FROM dbo.Tasks t
+     JOIN dbo.Workspaces w ON w.Id = t.WorkspaceId
+     JOIN dbo.Users u ON u.Id = t.AssigneeId
+     WHERE t.Entry IS NULL AND t.Status <> 'done'
+       AND t.DueDate IS NOT NULL
+       AND t.DueDate <= DATEADD(day, @days, CAST(GETDATE() AS DATE))
+     UNION
+     SELECT u.Id, u.Name, u.Email, t.Id, t.Title,
+            t.DueDate, t.Status, w.Name
+     FROM dbo.Tasks t
+     JOIN dbo.Workspaces w ON w.Id = t.WorkspaceId
+     JOIN dbo.TaskCollaborators tc ON tc.TaskId = t.Id
+     JOIN dbo.Users u ON u.Id = tc.UserId
+     WHERE t.Entry IS NULL AND t.Status <> 'done'
+       AND t.DueDate IS NOT NULL
+       AND t.DueDate <= DATEADD(day, @days, CAST(GETDATE() AS DATE))
+     ORDER BY UserId, DueDate`
+  );
+  return result.recordset;
+}
