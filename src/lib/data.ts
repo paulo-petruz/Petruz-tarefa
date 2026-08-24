@@ -1,5 +1,6 @@
 import "server-only";
 import { getPool, sql } from "./db";
+import { DONE_ARCHIVE_DAYS } from "./constants";
 
 export interface UserRecord {
   Id: number;
@@ -499,19 +500,57 @@ const TASK_SELECT = `
   LEFT JOIN dbo.Users a ON a.Id = t.AssigneeId
   JOIN dbo.Workspaces w ON w.Id = t.WorkspaceId`;
 
+/**
+ * Recorte do arquivo: mantém todas as tarefas em aberto e apenas as
+ * concluídas dentro da janela de @days dias. CompletedDate pode ser nula em
+ * registros antigos, por isso o COALESCE com UpdatedAt.
+ */
+const DONE_WINDOW_FILTER = `
+  AND (t.Status <> 'done'
+       OR COALESCE(t.CompletedDate, CAST(t.UpdatedAt AS DATE))
+          >= DATEADD(day, -@days, CAST(GETDATE() AS DATE)))`;
+
+/**
+ * Tarefas-mãe do espaço. Por padrão traz só as concluídas recentes;
+ * @param doneDays janela em dias, ou null para incluir todo o arquivo.
+ */
 export async function listTasksByWorkspace(
-  workspaceId: number
+  workspaceId: number,
+  doneDays: number | null = DONE_ARCHIVE_DAYS
 ): Promise<Task[]> {
+  const pool = await getPool();
+  const request = pool.request().input("workspaceId", sql.Int, workspaceId);
+  let windowFilter = "";
+  if (doneDays != null) {
+    request.input("days", sql.Int, doneDays);
+    windowFilter = DONE_WINDOW_FILTER;
+  }
+  const result = await request.query(
+    `${TASK_SELECT}
+     WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL${windowFilter}
+     ORDER BY CASE WHEN t.DueDate IS NULL THEN 1 ELSE 0 END, t.DueDate, t.Id DESC`
+  );
+  return result.recordset.map(mapTask);
+}
+
+/** Quantas concluídas ficaram fora da janela (estão no arquivo). */
+export async function countArchivedTasks(
+  workspaceId: number,
+  doneDays: number
+): Promise<number> {
   const pool = await getPool();
   const result = await pool
     .request()
     .input("workspaceId", sql.Int, workspaceId)
+    .input("days", sql.Int, doneDays)
     .query(
-      `${TASK_SELECT}
-       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL
-       ORDER BY CASE WHEN t.DueDate IS NULL THEN 1 ELSE 0 END, t.DueDate, t.Id DESC`
+      `SELECT COUNT(*) AS Total
+       FROM dbo.Tasks
+       WHERE WorkspaceId = @workspaceId AND Entry IS NULL AND Status = 'done'
+         AND COALESCE(CompletedDate, CAST(UpdatedAt AS DATE))
+             < DATEADD(day, -@days, CAST(GETDATE() AS DATE))`
     );
-  return result.recordset.map(mapTask);
+  return result.recordset[0]?.Total ?? 0;
 }
 
 export async function getTask(id: number): Promise<Task | null> {
@@ -743,19 +782,33 @@ export async function deleteTask(id: number): Promise<void> {
 
 // ---------- Subtarefas (tarefas-filhas: Entry = Id da tarefa-mãe) ----------
 
-/** Lista as subtarefas (tarefas-filhas) do workspace, com todos os atributos. */
+/**
+ * Subtarefas (tarefas-filhas) do workspace. Carrega apenas as subtarefas
+ * cujas mães estão visíveis na mesma janela, para não trazer todo o
+ * histórico junto.
+ */
 export async function listSubtasksByWorkspace(
-  workspaceId: number
+  workspaceId: number,
+  doneDays: number | null = DONE_ARCHIVE_DAYS
 ): Promise<Task[]> {
   const pool = await getPool();
-  const result = await pool
-    .request()
-    .input("workspaceId", sql.Int, workspaceId)
-    .query(
-      `${TASK_SELECT}
-       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NOT NULL
-       ORDER BY t.Id DESC`
-    );
+  const request = pool.request().input("workspaceId", sql.Int, workspaceId);
+  let windowFilter = "";
+  if (doneDays != null) {
+    request.input("days", sql.Int, doneDays);
+    windowFilter = `
+      AND EXISTS (
+        SELECT 1 FROM dbo.Tasks p
+        WHERE p.Id = t.Entry
+          AND (p.Status <> 'done'
+               OR COALESCE(p.CompletedDate, CAST(p.UpdatedAt AS DATE))
+                  >= DATEADD(day, -@days, CAST(GETDATE() AS DATE))))`;
+  }
+  const result = await request.query(
+    `${TASK_SELECT}
+     WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NOT NULL${windowFilter}
+     ORDER BY t.Id DESC`
+  );
   return result.recordset.map(mapTask);
 }
 

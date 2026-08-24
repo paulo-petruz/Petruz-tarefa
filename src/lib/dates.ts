@@ -26,6 +26,15 @@ export function formatDateShort(date: Date | string | null): string {
   return `${day}/${month}`;
 }
 
+/** Data de N dias atrás em "yyyy-MM-dd" (fuso local, sem deslocar o dia). */
+export function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
 function isoToLocalDate(iso: string): Date {
   const [year, month, day] = iso.split("-").map(Number);
   return new Date(year, month - 1, day);

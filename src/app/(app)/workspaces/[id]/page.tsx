@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { requireUser, requireWorkspaceMember } from "@/lib/authz";
 import {
+  countArchivedTasks,
   getWorkspace,
   listApprovalsToDecide,
   listMyApprovalRequests,
@@ -11,6 +12,8 @@ import {
   type Task,
 } from "@/lib/data";
 import { requiresDeleteApproval } from "@/lib/permissions";
+import { DONE_ARCHIVE_DAYS } from "@/lib/constants";
+import { isoDaysAgo } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApprovalsDialog } from "@/components/workspaces/approvals-dialog";
@@ -21,11 +24,14 @@ import { TaskTable } from "@/components/tasks/task-table";
 import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskByPerson } from "@/components/tasks/task-by-person";
 import { StatusSummary } from "@/components/tasks/status-summary";
+import { ArchiveNotice } from "@/components/tasks/archive-notice";
 
 export default async function WorkspacePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { arquivo?: string };
 }) {
   const workspaceId = Number(params.id);
   if (!Number.isInteger(workspaceId)) notFound();
@@ -36,14 +42,26 @@ export default async function WorkspacePage({
   const workspace = await getWorkspace(workspaceId);
   if (!workspace) notFound();
 
-  const [tasks, members, subtasks, approvalsToDecide, myApprovals] =
-    await Promise.all([
-      listTasksByWorkspace(workspaceId),
-      listWorkspaceMembers(workspaceId),
-      listSubtasksByWorkspace(workspaceId),
-      listApprovalsToDecide(workspaceId, user.id),
-      listMyApprovalRequests(workspaceId, user.id),
-    ]);
+  // ?arquivo=1 carrega todo o histórico; o padrão traz só as concluídas
+  // recentes, evitando puxar tudo de uma vez.
+  const showingArchive = searchParams.arquivo === "1";
+  const doneDays = showingArchive ? null : DONE_ARCHIVE_DAYS;
+
+  const [
+    tasks,
+    members,
+    subtasks,
+    approvalsToDecide,
+    myApprovals,
+    archivedCount,
+  ] = await Promise.all([
+    listTasksByWorkspace(workspaceId, doneDays),
+    listWorkspaceMembers(workspaceId),
+    listSubtasksByWorkspace(workspaceId, doneDays),
+    listApprovalsToDecide(workspaceId, user.id),
+    listMyApprovalRequests(workspaceId, user.id),
+    countArchivedTasks(workspaceId, DONE_ARCHIVE_DAYS),
+  ]);
 
   const subtasksByTask = subtasks.reduce<Record<number, Task[]>>(
     (acc, subtask) => {
@@ -113,6 +131,13 @@ export default async function WorkspacePage({
       </div>
 
       <StatusSummary tasks={tasks} />
+
+      <ArchiveNotice
+        hiddenCount={archivedCount}
+        cutoffDate={isoDaysAgo(DONE_ARCHIVE_DAYS)}
+        showingAll={showingArchive}
+        baseHref={`/workspaces/${workspaceId}`}
+      />
 
       <Tabs defaultValue="people">
         <TabsList>

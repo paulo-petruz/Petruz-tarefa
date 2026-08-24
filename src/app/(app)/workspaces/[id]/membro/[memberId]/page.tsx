@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, FolderOpen, Plus, UserRound } from "lucide-react";
 import { requireUser, requireWorkspaceMember } from "@/lib/authz";
 import {
+  countArchivedTasks,
   getWorkspace,
   listSubtasksByWorkspace,
   listTasksByWorkspace,
@@ -10,9 +11,12 @@ import {
   type Task,
 } from "@/lib/data";
 import { requiresDeleteApproval } from "@/lib/permissions";
+import { DONE_ARCHIVE_DAYS } from "@/lib/constants";
+import { isoDaysAgo } from "@/lib/dates";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { StatusSummary } from "@/components/tasks/status-summary";
+import { ArchiveNotice } from "@/components/tasks/archive-notice";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { TaskTable } from "@/components/tasks/task-table";
 
@@ -27,8 +31,10 @@ function initials(name: string): string {
 
 export default async function MemberFolderPage({
   params,
+  searchParams,
 }: {
   params: { id: string; memberId: string };
+  searchParams: { arquivo?: string };
 }) {
   const workspaceId = Number(params.id);
   const memberId = Number(params.memberId);
@@ -42,10 +48,15 @@ export default async function MemberFolderPage({
   const workspace = await getWorkspace(workspaceId);
   if (!workspace) notFound();
 
-  const [allTasks, members, allSubtasks] = await Promise.all([
-    listTasksByWorkspace(workspaceId),
+  // Mesma janela de concluídas da página do espaço.
+  const showingArchive = searchParams.arquivo === "1";
+  const doneDays = showingArchive ? null : DONE_ARCHIVE_DAYS;
+
+  const [allTasks, members, allSubtasks, archivedCount] = await Promise.all([
+    listTasksByWorkspace(workspaceId, doneDays),
     listWorkspaceMembers(workspaceId),
-    listSubtasksByWorkspace(workspaceId),
+    listSubtasksByWorkspace(workspaceId, doneDays),
+    countArchivedTasks(workspaceId, DONE_ARCHIVE_DAYS),
   ]);
 
   // memberId 0 = pasta "Sem responsável"
@@ -136,6 +147,13 @@ export default async function MemberFolderPage({
       </div>
 
       <StatusSummary tasks={tasks} />
+
+      <ArchiveNotice
+        hiddenCount={archivedCount}
+        cutoffDate={isoDaysAgo(DONE_ARCHIVE_DAYS)}
+        showingAll={showingArchive}
+        baseHref={`/workspaces/${workspaceId}/membro/${memberId}`}
+      />
 
       <TaskTable
         tasks={tasks}

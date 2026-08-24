@@ -25,6 +25,13 @@ export function priorityLabel(priority: string): string {
 }
 
 /**
+ * Janela padrão (em dias) de tarefas concluídas carregadas nas listagens.
+ * As concluídas mais antigas ficam no "arquivo", carregado sob demanda —
+ * evita trazer todo o histórico de uma vez em espaços com muito volume.
+ */
+export const DONE_ARCHIVE_DAYS = 30;
+
+/**
  * Tipos de solicitação de autorização. O fluxo de aprovação é genérico:
  * novos tipos (ex.: alteração de prazo) só precisam ser adicionados aqui e
  * tratados no executor da action.
