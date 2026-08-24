@@ -9,6 +9,7 @@ import {
   listWorkspaceMembers,
   type Task,
 } from "@/lib/data";
+import { requiresDeleteApproval } from "@/lib/permissions";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { StatusSummary } from "@/components/tasks/status-summary";
@@ -65,6 +66,17 @@ export default async function MemberFolderPage({
       (acc[subtask.Entry as number] ??= []).push(subtask);
       return acc;
     }, {});
+
+  // Mesma regra de autorização da página do espaço.
+  const needsDeleteApproval = requiresDeleteApproval(
+    user.id,
+    role === "admin",
+    workspace.OwnerId
+  );
+  const approverName =
+    members.find((m) => m.UserId === user.id)?.ApproverName ??
+    members.find((m) => m.UserId === workspace.OwnerId)?.Name ??
+    null;
 
   const folderName = member?.Name ?? "Sem responsável";
   const isOwnFolder = member?.UserId === user.id;
@@ -132,6 +144,8 @@ export default async function MemberFolderPage({
         subtasksByTask={subtasksByTask}
         currentUserId={user.id}
         isAdmin={role === "admin"}
+        requiresDeleteApproval={needsDeleteApproval}
+        approverName={approverName}
       />
     </div>
   );

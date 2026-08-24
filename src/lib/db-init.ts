@@ -22,6 +22,7 @@ const DDL_STATEMENTS: string[] = [
      Description NVARCHAR(500) NULL,
      Color NVARCHAR(20) NOT NULL DEFAULT '#7C3AED',
      OwnerId INT NOT NULL REFERENCES dbo.Users(Id),
+     DeletedAt DATETIME2 NULL,
      CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
    )`,
 
@@ -123,6 +124,34 @@ const DDL_STATEMENTS: string[] = [
 
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Subtasks_TaskId')
    CREATE INDEX IX_Subtasks_TaskId ON dbo.Subtasks (TaskId)`,
+
+  // Autorizador de cada membro no espaço (quem aprova as solicitações dele)
+  `IF COL_LENGTH('dbo.WorkspaceMembers', 'ApproverId') IS NULL
+   ALTER TABLE dbo.WorkspaceMembers ADD ApproverId INT NULL REFERENCES dbo.Users(Id)`,
+
+  // Solicitações de autorização (genérico: Type + TargetId permitem reuso
+  // para outros fluxos além da exclusão de tarefas)
+  `IF OBJECT_ID('dbo.ApprovalRequests', 'U') IS NULL
+   CREATE TABLE dbo.ApprovalRequests (
+     Id INT IDENTITY(1,1) PRIMARY KEY,
+     WorkspaceId INT NOT NULL REFERENCES dbo.Workspaces(Id) ON DELETE CASCADE,
+     Type NVARCHAR(30) NOT NULL,
+     TargetId INT NULL,
+     TargetLabel NVARCHAR(200) NULL,
+     RequesterId INT NOT NULL REFERENCES dbo.Users(Id),
+     ApproverId INT NOT NULL REFERENCES dbo.Users(Id),
+     Status NVARCHAR(20) NOT NULL DEFAULT 'pending',
+     Reason NVARCHAR(500) NULL,
+     DecisionNote NVARCHAR(500) NULL,
+     CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+     DecidedAt DATETIME2 NULL
+   )`,
+
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ApprovalRequests_Approver')
+   CREATE INDEX IX_ApprovalRequests_Approver ON dbo.ApprovalRequests (ApproverId, Status)`,
+
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ApprovalRequests_Workspace')
+   CREATE INDEX IX_ApprovalRequests_Workspace ON dbo.ApprovalRequests (WorkspaceId, Status)`,
 
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_WorkspaceId')
    CREATE INDEX IX_Tasks_WorkspaceId ON dbo.Tasks (WorkspaceId)`,

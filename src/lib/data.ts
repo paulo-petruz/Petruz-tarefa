@@ -25,6 +25,9 @@ export interface WorkspaceMember {
   Name: string;
   Email: string;
   Role: string;
+  /** Autorizador do membro neste espaço (null = usa o dono como padrão). */
+  ApproverId: number | null;
+  ApproverName: string | null;
 }
 
 export interface Task {
@@ -230,9 +233,11 @@ export async function listWorkspaceMembers(
     .request()
     .input("workspaceId", sql.Int, workspaceId)
     .query(
-      `SELECT u.Id AS UserId, u.Name, u.Email, wm.Role
+      `SELECT u.Id AS UserId, u.Name, u.Email, wm.Role,
+              wm.ApproverId, ap.Name AS ApproverName
        FROM dbo.WorkspaceMembers wm
        JOIN dbo.Users u ON u.Id = wm.UserId
+       LEFT JOIN dbo.Users ap ON ap.Id = wm.ApproverId
        WHERE wm.WorkspaceId = @workspaceId
        ORDER BY u.Name`
     );
@@ -270,6 +275,208 @@ export async function removeWorkspaceMember(
       `DELETE FROM dbo.WorkspaceMembers
        WHERE WorkspaceId = @workspaceId AND UserId = @userId`
     );
+}
+
+/** Define (ou limpa, com null) o autorizador de um membro no espaço. */
+export async function setMemberApprover(
+  workspaceId: number,
+  userId: number,
+  approverId: number | null
+): Promise<void> {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input("workspaceId", sql.Int, workspaceId)
+    .input("userId", sql.Int, userId)
+    .input("approverId", sql.Int, approverId)
+    .query(
+      `UPDATE dbo.WorkspaceMembers
+       SET ApproverId = @approverId
+       WHERE WorkspaceId = @workspaceId AND UserId = @userId`
+    );
+}
+
+/**
+ * Autorizador efetivo do membro: o configurado no espaço ou, na falta dele,
+ * o dono do espaço (garante que a solicitação sempre tenha destinatário).
+ * Retorna null quando o usuário não é membro do espaço.
+ */
+export async function getEffectiveApproverId(
+  workspaceId: number,
+  userId: number
+): Promise<number | null> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("workspaceId", sql.Int, workspaceId)
+    .input("userId", sql.Int, userId)
+    .query(
+      `SELECT COALESCE(wm.ApproverId, w.OwnerId) AS ApproverId
+       FROM dbo.WorkspaceMembers wm
+       JOIN dbo.Workspaces w ON w.Id = wm.WorkspaceId
+       WHERE wm.WorkspaceId = @workspaceId AND wm.UserId = @userId`
+    );
+  return result.recordset[0]?.ApproverId ?? null;
+}
+
+/** Limpa o vínculo de autorizador de quem apontava para o usuário removido. */
+export async function clearApproverReferences(
+  workspaceId: number,
+  approverId: number
+): Promise<void> {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input("workspaceId", sql.Int, workspaceId)
+    .input("approverId", sql.Int, approverId)
+    .query(
+      `UPDATE dbo.WorkspaceMembers
+       SET ApproverId = NULL
+       WHERE WorkspaceId = @workspaceId AND ApproverId = @approverId`
+    );
+}
+
+// ---------- Solicitações de autorização ----------
+
+export interface ApprovalRequest {
+  Id: number;
+  WorkspaceId: number;
+  Type: string;
+  TargetId: number | null;
+  TargetLabel: string | null;
+  RequesterId: number;
+  RequesterName: string;
+  ApproverId: number;
+  ApproverName: string;
+  Status: string;
+  Reason: string | null;
+  DecisionNote: string | null;
+  CreatedAt: Date;
+  DecidedAt: Date | null;
+}
+
+const APPROVAL_SELECT = `
+  SELECT ar.Id, ar.WorkspaceId, ar.Type, ar.TargetId, ar.TargetLabel,
+         ar.RequesterId, rq.Name AS RequesterName,
+         ar.ApproverId, ap.Name AS ApproverName,
+         ar.Status, ar.Reason, ar.DecisionNote, ar.CreatedAt, ar.DecidedAt
+  FROM dbo.ApprovalRequests ar
+  JOIN dbo.Users rq ON rq.Id = ar.RequesterId
+  JOIN dbo.Users ap ON ap.Id = ar.ApproverId`;
+
+export async function getApprovalRequest(
+  id: number
+): Promise<ApprovalRequest | null> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("id", sql.Int, id)
+    .query(`${APPROVAL_SELECT} WHERE ar.Id = @id`);
+  return result.recordset[0] ?? null;
+}
+
+/** Solicitação pendente já existente para o mesmo alvo (evita duplicidade). */
+export async function findPendingApproval(
+  type: string,
+  targetId: number
+): Promise<ApprovalRequest | null> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("type", sql.NVarChar(30), type)
+    .input("targetId", sql.Int, targetId)
+    .query(
+      `${APPROVAL_SELECT}
+       WHERE ar.Type = @type AND ar.TargetId = @targetId AND ar.Status = 'pending'`
+    );
+  return result.recordset[0] ?? null;
+}
+
+export interface ApprovalRequestInput {
+  workspaceId: number;
+  type: string;
+  targetId: number | null;
+  targetLabel: string | null;
+  requesterId: number;
+  approverId: number;
+  reason: string | null;
+}
+
+export async function createApprovalRequest(
+  input: ApprovalRequestInput
+): Promise<number> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("workspaceId", sql.Int, input.workspaceId)
+    .input("type", sql.NVarChar(30), input.type)
+    .input("targetId", sql.Int, input.targetId)
+    .input("targetLabel", sql.NVarChar(200), input.targetLabel)
+    .input("requesterId", sql.Int, input.requesterId)
+    .input("approverId", sql.Int, input.approverId)
+    .input("reason", sql.NVarChar(500), input.reason)
+    .query(
+      `INSERT INTO dbo.ApprovalRequests
+         (WorkspaceId, Type, TargetId, TargetLabel, RequesterId, ApproverId, Reason)
+       OUTPUT INSERTED.Id
+       VALUES (@workspaceId, @type, @targetId, @targetLabel, @requesterId, @approverId, @reason)`
+    );
+  return result.recordset[0].Id;
+}
+
+/** Registra a decisão; só afeta solicitações ainda pendentes. */
+export async function decideApprovalRequest(
+  id: number,
+  status: "approved" | "declined",
+  decisionNote: string | null
+): Promise<void> {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input("id", sql.Int, id)
+    .input("status", sql.NVarChar(20), status)
+    .input("note", sql.NVarChar(500), decisionNote)
+    .query(
+      `UPDATE dbo.ApprovalRequests
+       SET Status = @status, DecisionNote = @note, DecidedAt = SYSUTCDATETIME()
+       WHERE Id = @id AND Status = 'pending'`
+    );
+}
+
+/** Solicitações que o usuário precisa decidir (é o autorizador). */
+export async function listApprovalsToDecide(
+  workspaceId: number,
+  approverId: number
+): Promise<ApprovalRequest[]> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("workspaceId", sql.Int, workspaceId)
+    .input("approverId", sql.Int, approverId)
+    .query(
+      `${APPROVAL_SELECT}
+       WHERE ar.WorkspaceId = @workspaceId AND ar.ApproverId = @approverId
+       ORDER BY CASE WHEN ar.Status = 'pending' THEN 0 ELSE 1 END, ar.Id DESC`
+    );
+  return result.recordset;
+}
+
+/** Solicitações abertas pelo próprio usuário (para acompanhar o status). */
+export async function listMyApprovalRequests(
+  workspaceId: number,
+  requesterId: number
+): Promise<ApprovalRequest[]> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("workspaceId", sql.Int, workspaceId)
+    .input("requesterId", sql.Int, requesterId)
+    .query(
+      `${APPROVAL_SELECT}
+       WHERE ar.WorkspaceId = @workspaceId AND ar.RequesterId = @requesterId
+       ORDER BY CASE WHEN ar.Status = 'pending' THEN 0 ELSE 1 END, ar.Id DESC`
+    );
+  return result.recordset;
 }
 
 // ---------- Tarefas ----------

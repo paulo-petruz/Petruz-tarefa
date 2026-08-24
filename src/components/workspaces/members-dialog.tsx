@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, UserPlus, Users } from "lucide-react";
+import { ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { useFormState, useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import {
   addMemberAction,
   removeMemberAction,
+  setMemberApproverAction,
   type ActionState,
 } from "@/lib/actions";
 import type { WorkspaceMember } from "@/lib/data";
@@ -44,6 +45,9 @@ function SubmitButton() {
 
 const initialState: ActionState = {};
 
+/** Valor do Select que representa "sem autorizador definido" (usa o dono). */
+const OWNER_DEFAULT = "owner";
+
 export function MembersDialog({
   workspaceId,
   ownerId,
@@ -57,6 +61,20 @@ export function MembersDialog({
 }) {
   const [state, formAction] = useFormState(addMemberAction, initialState);
   const [removing, setRemoving] = useState<number | null>(null);
+  const [savingApprover, setSavingApprover] = useState<number | null>(null);
+
+  async function handleApprover(userId: number, value: string) {
+    setSavingApprover(userId);
+    const approverId = value === OWNER_DEFAULT ? null : Number(value);
+    const result = await setMemberApproverAction(
+      workspaceId,
+      userId,
+      approverId
+    );
+    setSavingApprover(null);
+    if (result.error) toast.error(result.error);
+    else toast.success("Autorizador atualizado.");
+  }
 
   async function handleRemove(userId: number) {
     setRemoving(userId);
@@ -126,8 +144,9 @@ export function MembersDialog({
           {members.map((member) => (
             <li
               key={member.UserId}
-              className="flex items-center justify-between gap-2 rounded-md border p-2"
+              className="space-y-2 rounded-md border p-2"
             >
+              <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{member.Name}</p>
                 <p className="truncate text-xs text-muted-foreground">
@@ -157,6 +176,42 @@ export function MembersDialog({
                   </Button>
                 )}
               </div>
+              </div>
+              {isAdmin && member.Role !== "admin" && (
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <Label className="shrink-0 text-xs font-normal text-muted-foreground">
+                    Autorizador
+                  </Label>
+                  <Select
+                    value={
+                      member.ApproverId != null
+                        ? String(member.ApproverId)
+                        : OWNER_DEFAULT
+                    }
+                    disabled={savingApprover === member.UserId}
+                    onValueChange={(value) =>
+                      handleApprover(member.UserId, value)
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={OWNER_DEFAULT}>
+                        Dono do espaço (padrão)
+                      </SelectItem>
+                      {members
+                        .filter((m) => m.UserId !== member.UserId)
+                        .map((m) => (
+                          <SelectItem key={m.UserId} value={String(m.UserId)}>
+                            {m.Name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </li>
           ))}
         </ul>

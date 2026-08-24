@@ -41,6 +41,8 @@ export function TaskTable({
   subtasksByTask,
   currentUserId,
   isAdmin,
+  requiresDeleteApproval = false,
+  approverName = null,
 }: {
   tasks: Task[];
   members: WorkspaceMember[];
@@ -48,6 +50,9 @@ export function TaskTable({
   subtasksByTask: Record<number, Task[]>;
   currentUserId: number;
   isAdmin: boolean;
+  /** True quando o usuário precisa de autorização para excluir tarefas. */
+  requiresDeleteApproval?: boolean;
+  approverName?: string | null;
 }) {
   const [expanded, setExpanded] = useState<number[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -394,6 +399,8 @@ export function TaskTable({
                           <TaskDeleteButton
                             taskId={task.Id}
                             taskTitle={task.Title}
+                            requiresApproval={requiresDeleteApproval}
+                            approverName={approverName}
                           />
                         )}
                       </div>
@@ -509,6 +516,8 @@ export function TaskTable({
                                   <TaskDeleteButton
                                     taskId={sub.Id}
                                     taskTitle={sub.Title}
+                                    requiresApproval={requiresDeleteApproval}
+                                    approverName={approverName}
                                   />
                                 </div>
                               )}

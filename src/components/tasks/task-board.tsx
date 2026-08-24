@@ -25,6 +25,8 @@ export function TaskBoard({
   subtasksByTask,
   currentUserId,
   isAdmin,
+  requiresDeleteApproval = false,
+  approverName = null,
 }: {
   tasks: Task[];
   members: WorkspaceMember[];
@@ -32,6 +34,9 @@ export function TaskBoard({
   subtasksByTask: Record<number, Task[]>;
   currentUserId: number;
   isAdmin: boolean;
+  /** True quando o usuário precisa de autorização para excluir tarefas. */
+  requiresDeleteApproval?: boolean;
+  approverName?: string | null;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -86,6 +91,8 @@ export function TaskBoard({
                               <TaskDeleteButton
                                 taskId={task.Id}
                                 taskTitle={task.Title}
+                                requiresApproval={requiresDeleteApproval}
+                                approverName={approverName}
                               />
                             )}
                           </div>

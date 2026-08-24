@@ -34,3 +34,18 @@ export function canDeleteTask(
   if (task.AssigneeId === userId) return true;
   return task.AssigneeId === null && task.CreatedById === userId;
 }
+
+/**
+ * Fluxo de autorização para excluir tarefas: o dono e os admins do espaço
+ * excluem direto; os demais membros abrem uma solicitação para o autorizador
+ * configurado (ou para o dono, quando não houver um definido).
+ */
+export function requiresDeleteApproval(
+  userId: number,
+  isAdmin: boolean,
+  workspaceOwnerId?: number | null
+): boolean {
+  if (isAdmin) return false;
+  if (workspaceOwnerId != null && workspaceOwnerId === userId) return false;
+  return true;
+}

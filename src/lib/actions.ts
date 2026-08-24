@@ -18,7 +18,8 @@ import {
   requireUser,
 } from "./authz";
 import * as data from "./data";
-import { TASK_PRIORITIES, TASK_STATUSES } from "./constants";
+import { APPROVAL_TYPES, TASK_PRIORITIES, TASK_STATUSES } from "./constants";
+import { canDeleteTask, requiresDeleteApproval } from "./permissions";
 
 export interface ActionState {
   error?: string;
@@ -274,12 +275,163 @@ export async function removeMemberAction(
       return { error: "O dono do espaço não pode ser removido." };
     }
     await data.removeWorkspaceMember(workspaceId, userId);
+    // Quem tinha o removido como autorizador volta ao padrão (dono do espaço).
+    await data.clearApproverReferences(workspaceId, userId);
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : "Erro ao remover membro.",
     };
   }
   revalidatePath(`/workspaces/${workspaceId}`);
+  return { success: true };
+}
+
+// ---------- Autorizador e solicitações ----------
+
+const approvalTypeValues = APPROVAL_TYPES.map((t) => t.value) as [
+  string,
+  ...string[],
+];
+
+/** Admin define quem autoriza as solicitações de um membro do espaço. */
+export async function setMemberApproverAction(
+  workspaceId: number,
+  userId: number,
+  approverId: number | null
+): Promise<ActionState> {
+  const user = await requireUser();
+  try {
+    await assertWorkspaceAdmin(workspaceId, user);
+    if (approverId != null) {
+      if (approverId === userId) {
+        return { error: "O membro não pode ser o próprio autorizador." };
+      }
+      const members = await data.listWorkspaceMembers(workspaceId);
+      if (!members.some((m) => m.UserId === approverId)) {
+        return { error: "O autorizador precisa ser membro deste espaço." };
+      }
+    }
+    await data.setMemberApprover(workspaceId, userId, approverId);
+  } catch (err) {
+    return {
+      error:
+        err instanceof Error ? err.message : "Erro ao definir o autorizador.",
+    };
+  }
+  revalidatePath(`/workspaces/${workspaceId}`);
+  return { success: true };
+}
+
+/**
+ * Abre uma solicitação de exclusão de tarefa para o autorizador do usuário.
+ * Usada por quem não é dono/admin do espaço.
+ */
+export async function requestTaskDeletionAction(
+  taskId: number,
+  reason: string
+): Promise<ActionState> {
+  const user = await requireUser();
+  try {
+    const task = await data.getTask(taskId);
+    if (!task) return { error: "Tarefa não encontrada." };
+
+    const role = await getWorkspaceRole(task.WorkspaceId, user.id);
+    if (!role) return { error: "Você não tem acesso a este espaço." };
+    // Só quem já teria direito de excluir pode solicitar a exclusão.
+    if (!canDeleteTask(task, user.id, role === "admin")) {
+      return { error: "Apenas o responsável pode excluir esta tarefa." };
+    }
+
+    const workspace = await data.getWorkspace(task.WorkspaceId);
+    if (!requiresDeleteApproval(user.id, role === "admin", workspace?.OwnerId)) {
+      return { error: "Você pode excluir esta tarefa diretamente." };
+    }
+
+    const approverId = await data.getEffectiveApproverId(
+      task.WorkspaceId,
+      user.id
+    );
+    if (!approverId || approverId === user.id) {
+      return {
+        error:
+          "Nenhum autorizador definido para você. Peça a um admin para configurar.",
+      };
+    }
+
+    const existing = await data.findPendingApproval("task_delete", taskId);
+    if (existing) {
+      return { error: "Já existe uma solicitação pendente para esta tarefa." };
+    }
+
+    await data.createApprovalRequest({
+      workspaceId: task.WorkspaceId,
+      type: "task_delete",
+      targetId: taskId,
+      targetLabel: task.Title,
+      requesterId: user.id,
+      approverId,
+      reason: reason.trim() || null,
+    });
+    revalidatePath(`/workspaces/${task.WorkspaceId}`);
+  } catch (err) {
+    return {
+      error:
+        err instanceof Error ? err.message : "Erro ao solicitar a exclusão.",
+    };
+  }
+  return { success: true };
+}
+
+/**
+ * Aplica o efeito de uma solicitação aprovada.
+ * Novos tipos de autorização são tratados aqui.
+ */
+async function executeApproval(request: data.ApprovalRequest): Promise<void> {
+  switch (request.Type) {
+    case "task_delete":
+      if (request.TargetId != null) await data.deleteTask(request.TargetId);
+      return;
+    default:
+      throw new Error("Tipo de solicitação não suportado.");
+  }
+}
+
+/** O autorizador (ou um admin do espaço) aprova ou recusa a solicitação. */
+export async function decideApprovalRequestAction(
+  requestId: number,
+  decision: "approved" | "declined",
+  note: string
+): Promise<ActionState> {
+  const user = await requireUser();
+  if (decision !== "approved" && decision !== "declined") {
+    return { error: "Decisão inválida." };
+  }
+  try {
+    const request = await data.getApprovalRequest(requestId);
+    if (!request) return { error: "Solicitação não encontrada." };
+    if (request.Status !== "pending") {
+      return { error: "Esta solicitação já foi decidida." };
+    }
+    if (!approvalTypeValues.includes(request.Type)) {
+      return { error: "Tipo de solicitação não suportado." };
+    }
+
+    const role = await getWorkspaceRole(request.WorkspaceId, user.id);
+    if (!role) return { error: "Você não tem acesso a este espaço." };
+    // Decide o autorizador designado; admins do espaço servem de retaguarda.
+    if (request.ApproverId !== user.id && role !== "admin") {
+      return { error: "Você não é o autorizador desta solicitação." };
+    }
+
+    if (decision === "approved") await executeApproval(request);
+    await data.decideApprovalRequest(requestId, decision, note.trim() || null);
+    revalidatePath(`/workspaces/${request.WorkspaceId}`);
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Erro ao decidir a solicitação.",
+    };
+  }
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -624,6 +776,16 @@ export async function deleteTaskAction(taskId: number): Promise<ActionState> {
     const task = await data.getTask(taskId);
     if (!task) return { error: "Tarefa não encontrada." };
     await assertCanDeleteTask(task, user);
+    // Quem não é dono/admin do espaço não exclui direto: precisa abrir uma
+    // solicitação para o autorizador (requestTaskDeletionAction).
+    const role = await getWorkspaceRole(task.WorkspaceId, user.id);
+    const workspace = await data.getWorkspace(task.WorkspaceId);
+    if (requiresDeleteApproval(user.id, role === "admin", workspace?.OwnerId)) {
+      return {
+        error:
+          "A exclusão precisa da autorização do seu aprovador. Envie uma solicitação.",
+      };
+    }
     await data.deleteTask(taskId);
     revalidatePath(`/workspaces/${task.WorkspaceId}`);
   } catch (err) {
