@@ -553,6 +553,40 @@ export async function countArchivedTasks(
   return result.recordset[0]?.Total ?? 0;
 }
 
+/**
+ * Concluídas no arquivo dentro do escopo de uma pasta de membro — mesmo
+ * recorte da página: responsável OU colaborador da tarefa.
+ * @param memberId 0 representa a pasta "Sem responsável".
+ */
+export async function countArchivedTasksForMember(
+  workspaceId: number,
+  doneDays: number,
+  memberId: number
+): Promise<number> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("workspaceId", sql.Int, workspaceId)
+    .input("days", sql.Int, doneDays)
+    .input("memberId", sql.Int, memberId)
+    .query(
+      `SELECT COUNT(*) AS Total
+       FROM dbo.Tasks t
+       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL AND t.Status = 'done'
+         AND COALESCE(t.CompletedDate, CAST(t.UpdatedAt AS DATE))
+             < DATEADD(day, -@days, CAST(GETDATE() AS DATE))
+         AND (
+           (@memberId = 0 AND t.AssigneeId IS NULL)
+           OR (@memberId <> 0 AND (
+                t.AssigneeId = @memberId
+                OR EXISTS (SELECT 1 FROM dbo.TaskCollaborators tc
+                           WHERE tc.TaskId = t.Id AND tc.UserId = @memberId)
+              ))
+         )`
+    );
+  return result.recordset[0]?.Total ?? 0;
+}
+
 export async function getTask(id: number): Promise<Task | null> {
   const pool = await getPool();
   const result = await pool

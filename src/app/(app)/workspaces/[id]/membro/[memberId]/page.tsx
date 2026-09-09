@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, FolderOpen, Plus, UserRound } from "lucide-react";
 import { requireUser, requireWorkspaceMember } from "@/lib/authz";
 import {
-  countArchivedTasks,
+  countArchivedTasksForMember,
   getWorkspace,
   listSubtasksByWorkspace,
   listTasksByWorkspace,
@@ -56,7 +56,7 @@ export default async function MemberFolderPage({
     listTasksByWorkspace(workspaceId, doneDays),
     listWorkspaceMembers(workspaceId),
     listSubtasksByWorkspace(workspaceId, doneDays),
-    countArchivedTasks(workspaceId, DONE_ARCHIVE_DAYS),
+    countArchivedTasksForMember(workspaceId, DONE_ARCHIVE_DAYS, memberId),
   ]);
 
   // memberId 0 = pasta "Sem responsável"
