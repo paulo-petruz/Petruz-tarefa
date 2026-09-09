@@ -43,6 +43,7 @@ export function TaskTable({
   isAdmin,
   requiresDeleteApproval = false,
   approverName = null,
+  initialStatusFilter = "all",
 }: {
   tasks: Task[];
   members: WorkspaceMember[];
@@ -53,9 +54,12 @@ export function TaskTable({
   /** True quando o usuário precisa de autorização para excluir tarefas. */
   requiresDeleteApproval?: boolean;
   approverName?: string | null;
+  /** Filtro pré-selecionado (vem da URL, ex.: clique no painel). */
+  initialStatusFilter?: string;
 }) {
   const [expanded, setExpanded] = useState<number[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] =
+    useState<string>(initialStatusFilter);
 
   function toggleExpanded(taskId: number) {
     setExpanded((prev) =>

@@ -7,6 +7,22 @@ export const TASK_STATUSES = [
 
 export type TaskStatus = (typeof TASK_STATUSES)[number]["value"];
 
+/**
+ * Valores aceitos pelo filtro da lista (chips e parâmetro ?status= da URL).
+ * Centralizado para o painel poder linkar direto para um filtro válido.
+ */
+export const TASK_FILTER_VALUES = [
+  "all",
+  ...TASK_STATUSES.map((s) => s.value),
+  "overdue",
+  "off_target",
+] as string[];
+
+/** Descarta valores inválidos vindos da URL, caindo em "all". */
+export function normalizeTaskFilter(value: string | undefined): string {
+  return value && TASK_FILTER_VALUES.includes(value) ? value : "all";
+}
+
 export const TASK_PRIORITIES = [
   { value: "low", label: "Baixa" },
   { value: "medium", label: "Média" },

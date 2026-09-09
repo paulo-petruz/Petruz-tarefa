@@ -1,6 +1,6 @@
 import { CheckCircle2, Circle, Eye, LoaderCircle } from "lucide-react";
 import { TASK_STATUSES } from "@/lib/constants";
-import type { Task } from "@/lib/data";
+import type { StatusTotal } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 const STATUS_VISUALS: Record<
@@ -29,13 +29,18 @@ const STATUS_VISUALS: Record<
   },
 };
 
-/** Cartões de acompanhamento por status do espaço. */
-export function StatusSummary({ tasks }: { tasks: Task[] }) {
+/**
+ * Cartões de acompanhamento por status. Recebe os totais já agregados no
+ * banco — contar pelo array carregado subestimaria as concluídas, que ficam
+ * limitadas à janela do arquivo.
+ */
+export function StatusSummary({ counts }: { counts: StatusTotal[] }) {
+  const totals = new Map(counts.map((c) => [c.Status, c.Total]));
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {TASK_STATUSES.map((status) => {
         const visual = STATUS_VISUALS[status.value];
-        const count = tasks.filter((t) => t.Status === status.value).length;
+        const count = totals.get(status.value) ?? 0;
         const Icon = visual.icon;
         return (
           <div

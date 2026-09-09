@@ -587,6 +587,103 @@ export async function countArchivedTasksForMember(
   return result.recordset[0]?.Total ?? 0;
 }
 
+// ---------- Resumo do espaço (painel) ----------
+
+export interface StatusTotal {
+  Status: string;
+  Total: number;
+  Overdue: number;
+}
+
+export interface PriorityTotal {
+  Priority: string;
+  Total: number;
+}
+
+export interface PersonTotal {
+  UserId: number | null;
+  Name: string | null;
+  Open: number;
+  Done: number;
+  Overdue: number;
+  Total: number;
+}
+
+export interface WorkspaceSummary {
+  byStatus: StatusTotal[];
+  byPriority: PriorityTotal[];
+  byPerson: PersonTotal[];
+}
+
+/**
+ * Recorte opcional por pessoa, igual ao da pasta do membro:
+ * responsável OU colaborador. memberId null = espaço inteiro;
+ * 0 = pasta "Sem responsável".
+ */
+const MEMBER_SCOPE = `
+  AND (@memberId IS NULL
+       OR (@memberId = 0 AND t.AssigneeId IS NULL)
+       OR (@memberId <> 0 AND (
+             t.AssigneeId = @memberId
+             OR EXISTS (SELECT 1 FROM dbo.TaskCollaborators tc
+                        WHERE tc.TaskId = t.Id AND tc.UserId = @memberId))))`;
+
+/** Vencida = em aberto, com previsão no passado. */
+const OVERDUE_CASE = `CASE WHEN t.Status <> 'done' AND t.DueDate IS NOT NULL
+                            AND t.DueDate < CAST(GETDATE() AS DATE)
+                       THEN 1 ELSE 0 END`;
+
+/**
+ * Agregados do painel. Calculados no banco sobre TODAS as tarefas-mãe —
+ * de propósito ignoram a janela do arquivo, para o resumo mostrar os
+ * totais reais do espaço.
+ */
+export async function getWorkspaceSummary(
+  workspaceId: number,
+  memberId: number | null = null
+): Promise<WorkspaceSummary> {
+  const pool = await getPool();
+  const req = () =>
+    pool
+      .request()
+      .input("workspaceId", sql.Int, workspaceId)
+      .input("memberId", sql.Int, memberId);
+
+  const [status, priority, person] = await Promise.all([
+    req().query(
+      `SELECT t.Status, COUNT(*) AS Total, SUM(${OVERDUE_CASE}) AS Overdue
+       FROM dbo.Tasks t
+       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL${MEMBER_SCOPE}
+       GROUP BY t.Status`
+    ),
+    req().query(
+      `SELECT t.Priority, COUNT(*) AS Total
+       FROM dbo.Tasks t
+       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL
+         AND t.Status <> 'done'${MEMBER_SCOPE}
+       GROUP BY t.Priority`
+    ),
+    req().query(
+      `SELECT t.AssigneeId AS UserId, u.Name,
+              SUM(CASE WHEN t.Status <> 'done' THEN 1 ELSE 0 END) AS [Open],
+              SUM(CASE WHEN t.Status = 'done' THEN 1 ELSE 0 END) AS Done,
+              SUM(${OVERDUE_CASE}) AS Overdue,
+              COUNT(*) AS Total
+       FROM dbo.Tasks t
+       LEFT JOIN dbo.Users u ON u.Id = t.AssigneeId
+       WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL${MEMBER_SCOPE}
+       GROUP BY t.AssigneeId, u.Name
+       ORDER BY COUNT(*) DESC`
+    ),
+  ]);
+
+  return {
+    byStatus: status.recordset,
+    byPriority: priority.recordset,
+    byPerson: person.recordset,
+  };
+}
+
 export async function getTask(id: number): Promise<Task | null> {
   const pool = await getPool();
   const result = await pool

@@ -4,6 +4,7 @@ import { requireUser, requireWorkspaceMember } from "@/lib/authz";
 import {
   countArchivedTasks,
   getWorkspace,
+  getWorkspaceSummary,
   listApprovalsToDecide,
   listMyApprovalRequests,
   listSubtasksByWorkspace,
@@ -12,7 +13,7 @@ import {
   type Task,
 } from "@/lib/data";
 import { requiresDeleteApproval } from "@/lib/permissions";
-import { DONE_ARCHIVE_DAYS } from "@/lib/constants";
+import { DONE_ARCHIVE_DAYS, normalizeTaskFilter } from "@/lib/constants";
 import { isoDaysAgo } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,17 +22,17 @@ import { MembersDialog } from "@/components/workspaces/members-dialog";
 import { WorkspaceDeleteButton } from "@/components/workspaces/workspace-delete-button";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { TaskTable } from "@/components/tasks/task-table";
-import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskByPerson } from "@/components/tasks/task-by-person";
 import { StatusSummary } from "@/components/tasks/status-summary";
 import { ArchiveNotice } from "@/components/tasks/archive-notice";
+import { WorkspaceDashboard } from "@/components/tasks/workspace-dashboard";
 
 export default async function WorkspacePage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { arquivo?: string };
+  searchParams: { arquivo?: string; aba?: string; status?: string };
 }) {
   const workspaceId = Number(params.id);
   if (!Number.isInteger(workspaceId)) notFound();
@@ -44,6 +45,13 @@ export default async function WorkspacePage({
 
   // ?arquivo=1 carrega todo o histórico; o padrão traz só as concluídas
   // recentes, evitando puxar tudo de uma vez.
+  // Aba e filtro vêm da URL para o painel poder linkar direto ao resultado.
+  const TABS = ["people", "list", "panel"];
+  const activeTab = TABS.includes(searchParams.aba ?? "")
+    ? (searchParams.aba as string)
+    : "people";
+  const statusFilter = normalizeTaskFilter(searchParams.status);
+
   const showingArchive = searchParams.arquivo === "1";
   const doneDays = showingArchive ? null : DONE_ARCHIVE_DAYS;
 
@@ -54,6 +62,7 @@ export default async function WorkspacePage({
     approvalsToDecide,
     myApprovals,
     archivedCount,
+    summary,
   ] = await Promise.all([
     listTasksByWorkspace(workspaceId, doneDays),
     listWorkspaceMembers(workspaceId),
@@ -61,6 +70,8 @@ export default async function WorkspacePage({
     listApprovalsToDecide(workspaceId, user.id),
     listMyApprovalRequests(workspaceId, user.id),
     countArchivedTasks(workspaceId, DONE_ARCHIVE_DAYS),
+    // Agregado no banco: totais reais, fora da janela do arquivo.
+    getWorkspaceSummary(workspaceId),
   ]);
 
   const subtasksByTask = subtasks.reduce<Record<number, Task[]>>(
@@ -130,7 +141,7 @@ export default async function WorkspacePage({
         </div>
       </div>
 
-      <StatusSummary tasks={tasks} />
+      <StatusSummary counts={summary.byStatus} />
 
       <ArchiveNotice
         hiddenCount={archivedCount}
@@ -139,11 +150,11 @@ export default async function WorkspacePage({
         baseHref={`/workspaces/${workspaceId}`}
       />
 
-      <Tabs defaultValue="people">
+      <Tabs defaultValue={activeTab} key={`${activeTab}-${statusFilter}`}>
         <TabsList>
           <TabsTrigger value="people">Por pessoa</TabsTrigger>
           <TabsTrigger value="list">Lista</TabsTrigger>
-          <TabsTrigger value="board">Quadro</TabsTrigger>
+          <TabsTrigger value="panel">Painel</TabsTrigger>
         </TabsList>
         <TabsContent value="people" className="mt-4">
           <TaskByPerson
@@ -164,18 +175,14 @@ export default async function WorkspacePage({
             isAdmin={isAdmin}
             requiresDeleteApproval={needsDeleteApproval}
             approverName={approverName}
+            initialStatusFilter={statusFilter}
           />
         </TabsContent>
-        <TabsContent value="board" className="mt-4">
-          <TaskBoard
-            tasks={tasks}
-            members={members}
-            workspaceId={workspaceId}
-            subtasksByTask={subtasksByTask}
-            currentUserId={user.id}
-            isAdmin={isAdmin}
-            requiresDeleteApproval={needsDeleteApproval}
-            approverName={approverName}
+        <TabsContent value="panel" className="mt-4">
+          <WorkspaceDashboard
+            summary={summary}
+            listHref={`/workspaces/${workspaceId}?aba=list`}
+            memberHrefBase={`/workspaces/${workspaceId}/membro`}
           />
         </TabsContent>
       </Tabs>
