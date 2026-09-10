@@ -125,6 +125,18 @@ const DDL_STATEMENTS: string[] = [
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Subtasks_TaskId')
    CREATE INDEX IX_Subtasks_TaskId ON dbo.Subtasks (TaskId)`,
 
+  // Supervisores da tarefa: acompanham sem assumir a execução — a tarefa NÃO
+  // entra na pasta nem nos números do supervisor (diferente de colaborador).
+  `IF OBJECT_ID('dbo.TaskSupervisors', 'U') IS NULL
+   CREATE TABLE dbo.TaskSupervisors (
+     TaskId INT NOT NULL REFERENCES dbo.Tasks(Id) ON DELETE CASCADE,
+     UserId INT NOT NULL REFERENCES dbo.Users(Id),
+     CONSTRAINT PK_TaskSupervisors PRIMARY KEY (TaskId, UserId)
+   )`,
+
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TaskSupervisors_UserId')
+   CREATE INDEX IX_TaskSupervisors_UserId ON dbo.TaskSupervisors (UserId)`,
+
   // Autorizador de cada membro no espaço (quem aprova as solicitações dele)
   `IF COL_LENGTH('dbo.WorkspaceMembers', 'ApproverId') IS NULL
    ALTER TABLE dbo.WorkspaceMembers ADD ApproverId INT NULL REFERENCES dbo.Users(Id)`,

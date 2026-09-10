@@ -1,7 +1,16 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { AlertTriangle, ChevronRight, Pencil, Plus, Target } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Eye,
+  Pencil,
+  Plus,
+  Target,
+} from "lucide-react";
 import type { Task, WorkspaceMember } from "@/lib/data";
 import { TASK_STATUSES } from "@/lib/constants";
 import { formatDateShort, getDueInfo } from "@/lib/dates";
@@ -132,6 +141,15 @@ export function TaskTable({
     },
   ];
 
+  // Só tarefas com subtarefas entram no expandir/recolher em massa —
+  // abrir as vazias só geraria ruído.
+  const expandableIds = filteredTasks
+    .filter((t) => (subtasksByTask[t.Id] ?? []).length > 0)
+    .map((t) => t.Id);
+  const allExpanded =
+    expandableIds.length > 0 &&
+    expandableIds.every((id) => expanded.includes(id));
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -178,6 +196,25 @@ export function TaskTable({
             </button>
           );
         })}
+        {expandableIds.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded(allExpanded ? [] : expandableIds)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+            title={
+              allExpanded
+                ? "Recolher as subtarefas de todas as tarefas"
+                : "Abrir as subtarefas de todas as tarefas"
+            }
+          >
+            {allExpanded ? (
+              <ChevronsDownUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronsUpDown className="h-3.5 w-3.5" />
+            )}
+            {allExpanded ? "Recolher todas" : "Expandir todas"}
+          </button>
+        )}
       </div>
 
       <div>
@@ -265,6 +302,17 @@ export function TaskTable({
                             subtaskDone={task.SubtaskDone}
                           />
                           <SubtaskOverdueBadge subtasks={subtasks} />
+                          {task.Supervisors.length > 0 && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0 text-[10px] font-medium leading-4 text-amber-600 dark:text-amber-400"
+                              title={`Supervisão: ${task.Supervisors.map((sup) => sup.Name).join(", ")}`}
+                            >
+                              <Eye className="h-2.5 w-2.5 shrink-0" />
+                              {task.Supervisors.length > 1
+                                ? `${task.Supervisors.length} supervisores`
+                                : task.Supervisors[0].Name}
+                            </span>
+                          )}
                           {task.StandardSeconds != null && (
                             <TaskProductionButton
                               taskId={task.Id}

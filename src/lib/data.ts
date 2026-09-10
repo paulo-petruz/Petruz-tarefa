@@ -60,15 +60,22 @@ export interface Task {
   ProdSeconds: number;
   /** Usuários vinculados além do responsável (compartilhamento). */
   Collaborators: { UserId: number; Name: string }[];
+  /**
+   * Supervisores acompanham a tarefa sem executá-la: ela NÃO entra na pasta
+   * nem nos totais deles (ao contrário de Collaborators).
+   */
+  Supervisors: { UserId: number; Name: string }[];
 }
 
-/** Converte a coluna CollaboratorsJson (FOR JSON) no array Collaborators. */
+/** Converte as colunas FOR JSON nos arrays de vínculo da tarefa. */
 function mapTask(row: Record<string, unknown>): Task {
-  const { CollaboratorsJson, ...rest } = row;
+  const { CollaboratorsJson, SupervisorsJson, ...rest } = row;
   return {
     ...(rest as unknown as Task),
     Collaborators:
       typeof CollaboratorsJson === "string" ? JSON.parse(CollaboratorsJson) : [],
+    Supervisors:
+      typeof SupervisorsJson === "string" ? JSON.parse(SupervisorsJson) : [],
   };
 }
 
@@ -495,7 +502,11 @@ const TASK_SELECT = `
     (SELECT u.Id AS UserId, u.Name
        FROM dbo.TaskCollaborators tc JOIN dbo.Users u ON u.Id = tc.UserId
        WHERE tc.TaskId = t.Id
-       FOR JSON PATH) AS CollaboratorsJson
+       FOR JSON PATH) AS CollaboratorsJson,
+    (SELECT u.Id AS UserId, u.Name
+       FROM dbo.TaskSupervisors ts JOIN dbo.Users u ON u.Id = ts.UserId
+       WHERE ts.TaskId = t.Id
+       FOR JSON PATH) AS SupervisorsJson
   FROM dbo.Tasks t
   LEFT JOIN dbo.Users a ON a.Id = t.AssigneeId
   JOIN dbo.Workspaces w ON w.Id = t.WorkspaceId`;
@@ -767,6 +778,64 @@ export async function setTaskCollaborators(
     await tx.rollback();
     throw err;
   }
+}
+
+/** Substitui a lista de supervisores de uma tarefa. */
+export async function setTaskSupervisors(
+  taskId: number,
+  userIds: number[]
+): Promise<void> {
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    await tx
+      .request()
+      .input("taskId", sql.Int, taskId)
+      .query("DELETE FROM dbo.TaskSupervisors WHERE TaskId = @taskId");
+    for (const userId of userIds) {
+      await tx
+        .request()
+        .input("taskId", sql.Int, taskId)
+        .input("userId", sql.Int, userId)
+        .query(
+          "INSERT INTO dbo.TaskSupervisors (TaskId, UserId) VALUES (@taskId, @userId)"
+        );
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+}
+
+/**
+ * Tarefas-mãe que o usuário supervisiona. Ficam separadas das tarefas dele:
+ * esta consulta é a única fonte da aba "Supervisionadas".
+ */
+export async function listSupervisedTasks(
+  workspaceId: number,
+  userId: number,
+  doneDays: number | null = DONE_ARCHIVE_DAYS
+): Promise<Task[]> {
+  const pool = await getPool();
+  const request = pool
+    .request()
+    .input("workspaceId", sql.Int, workspaceId)
+    .input("userId", sql.Int, userId);
+  let windowFilter = "";
+  if (doneDays != null) {
+    request.input("days", sql.Int, doneDays);
+    windowFilter = DONE_WINDOW_FILTER;
+  }
+  const result = await request.query(
+    `${TASK_SELECT}
+     WHERE t.WorkspaceId = @workspaceId AND t.Entry IS NULL${windowFilter}
+       AND EXISTS (SELECT 1 FROM dbo.TaskSupervisors ts
+                   WHERE ts.TaskId = t.Id AND ts.UserId = @userId)
+     ORDER BY CASE WHEN t.DueDate IS NULL THEN 1 ELSE 0 END, t.DueDate, t.Id DESC`
+  );
+  return result.recordset.map(mapTask);
 }
 
 // ---------- Apontamentos de produção (tarefa mensurável) ----------

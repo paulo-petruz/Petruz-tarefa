@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { useFormState, useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -31,6 +32,12 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 export interface TaskFormValues {
@@ -46,9 +53,87 @@ export interface TaskFormValues {
   progress: number;
   entry: number | null;
   collaboratorIds: number[];
+  supervisorIds: number[];
   metaType: string | null; // 'teto' | 'piso' | null
   metaValue: number | null;
   standardMinutes: number | null;
+}
+
+/**
+ * Seleção de vários membros em dropdown. Mantém inputs ocultos para o form
+ * action continuar recebendo os ids como antes (getAll no servidor).
+ */
+function MemberMultiSelect({
+  members,
+  selected,
+  onChange,
+  name,
+  placeholder,
+  selectedClassName,
+}: {
+  members: WorkspaceMember[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+  /** Nome do campo enviado no formulário. */
+  name: string;
+  placeholder: string;
+  /** Destaque do resumo quando há seleção. */
+  selectedClassName?: string;
+}) {
+  const chosen = members.filter((m) => selected.includes(m.UserId));
+  const label =
+    chosen.length === 0
+      ? placeholder
+      : chosen.length <= 2
+        ? chosen.map((m) => m.Name).join(", ")
+        : `${chosen[0].Name} +${chosen.length - 1}`;
+
+  const toggle = (userId: number) =>
+    onChange(
+      selected.includes(userId)
+        ? selected.filter((id) => id !== userId)
+        : [...selected, userId]
+    );
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              "w-full justify-between font-normal",
+              chosen.length === 0 && "text-muted-foreground",
+              chosen.length > 0 && selectedClassName
+            )}
+          >
+            <span className="truncate">{label}</span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
+        >
+          {members.map((m) => (
+            <DropdownMenuCheckboxItem
+              key={m.UserId}
+              checked={selected.includes(m.UserId)}
+              // Evita fechar o menu a cada marcação (seleção múltipla).
+              onSelect={(e) => e.preventDefault()}
+              onCheckedChange={() => toggle(m.UserId)}
+            >
+              {m.Name}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {selected.map((id) => (
+        <input key={id} type="hidden" name={name} value={id} />
+      ))}
+    </>
+  );
 }
 
 function SubmitButton({
@@ -110,6 +195,9 @@ export function TaskDialog({
   const [open, setOpen] = useState(false);
   const [collabs, setCollabs] = useState<number[]>(
     task?.collaboratorIds ?? []
+  );
+  const [supervisors, setSupervisors] = useState<number[]>(
+    task?.supervisorIds ?? []
   );
   const [metaType, setMetaType] = useState<string>(task?.metaType ?? "none");
   const [measure, setMeasure] = useState(task?.standardMinutes != null);
@@ -234,43 +322,33 @@ export function TaskDialog({
           {isMotherTask && members.length > 1 && (
             <div className="space-y-2">
               <Label>Compartilhar com</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {members.map((m) => {
-                  const selected = collabs.includes(m.UserId);
-                  return (
-                    <button
-                      key={m.UserId}
-                      type="button"
-                      onClick={() =>
-                        setCollabs((prev) =>
-                          selected
-                            ? prev.filter((id) => id !== m.UserId)
-                            : [...prev, m.UserId]
-                        )
-                      }
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                        selected
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card text-muted-foreground hover:bg-muted"
-                      )}
-                    >
-                      {m.Name}
-                    </button>
-                  );
-                })}
-              </div>
-              {collabs.map((id) => (
-                <input
-                  key={id}
-                  type="hidden"
-                  name="collaborators"
-                  value={id}
-                />
-              ))}
+              <MemberMultiSelect
+                members={members}
+                selected={collabs}
+                onChange={setCollabs}
+                name="collaborators"
+                placeholder="Ninguém — só o responsável"
+              />
               <p className="text-xs text-muted-foreground">
                 Quem for marcado também vê e edita a tarefa, e ela aparece na
                 pasta dele. O responsável não precisa ser marcado.
+              </p>
+            </div>
+          )}
+          {isMotherTask && members.length > 1 && (
+            <div className="space-y-2">
+              <Label>Supervisores</Label>
+              <MemberMultiSelect
+                members={members}
+                selected={supervisors}
+                onChange={setSupervisors}
+                name="supervisors"
+                placeholder="Nenhum supervisor"
+                selectedClassName="border-amber-500/60 text-amber-700 dark:text-amber-400"
+              />
+              <p className="text-xs text-muted-foreground">
+                O supervisor acompanha a tarefa na aba “Supervisionadas”, sem
+                que ela entre na pasta nem nos números dele.
               </p>
             </div>
           )}

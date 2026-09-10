@@ -6,6 +6,7 @@ import {
   countArchivedTasksForMember,
   getWorkspace,
   getWorkspaceSummary,
+  listSupervisedTasks,
   listSubtasksByWorkspace,
   listTasksByWorkspace,
   listWorkspaceMembers,
@@ -53,7 +54,7 @@ export default async function MemberFolderPage({
 
   // Mesma janela de concluídas da página do espaço.
   // Aba na URL, como na página do espaço: mantém os links do painel válidos.
-  const TABS = ["list", "panel"];
+  const TABS = ["list", "supervised", "panel"];
   const activeTab = TABS.includes(searchParams.aba ?? "")
     ? (searchParams.aba as string)
     : "list";
@@ -61,7 +62,7 @@ export default async function MemberFolderPage({
   const showingArchive = searchParams.arquivo === "1";
   const doneDays = showingArchive ? null : DONE_ARCHIVE_DAYS;
 
-  const [allTasks, members, allSubtasks, archivedCount, summary] =
+  const [allTasks, members, allSubtasks, archivedCount, summary, supervised] =
     await Promise.all([
       listTasksByWorkspace(workspaceId, doneDays),
       listWorkspaceMembers(workspaceId),
@@ -69,6 +70,10 @@ export default async function MemberFolderPage({
       countArchivedTasksForMember(workspaceId, DONE_ARCHIVE_DAYS, memberId),
       // Mesmo recorte da pasta (responsável ou colaborador), totais reais.
       getWorkspaceSummary(workspaceId, memberId),
+      // Supervisionadas ficam à parte: não entram na lista nem no resumo.
+      memberId === 0
+        ? Promise.resolve([])
+        : listSupervisedTasks(workspaceId, memberId, doneDays),
     ]);
 
   // memberId 0 = pasta "Sem responsável"
@@ -82,6 +87,19 @@ export default async function MemberFolderPage({
         t.Collaborators.some((c) => c.UserId === member.UserId)
       : t.AssigneeId === null
   );
+  // A aba "Supervisionadas" só existe quando há o que supervisionar; um link
+  // antigo para ela cairia numa aba sem gatilho.
+  const effectiveTab =
+    activeTab === "supervised" && supervised.length === 0 ? "list" : activeTab;
+
+  const supervisedIds = new Set(supervised.map((t) => t.Id));
+  const supervisedSubtasks = allSubtasks
+    .filter((s) => s.Entry != null && supervisedIds.has(s.Entry))
+    .reduce<Record<number, Task[]>>((acc, subtask) => {
+      (acc[subtask.Entry as number] ??= []).push(subtask);
+      return acc;
+    }, {});
+
   const taskIds = new Set(tasks.map((t) => t.Id));
   const subtasksByTask = allSubtasks
     .filter((s) => s.Entry != null && taskIds.has(s.Entry))
@@ -160,9 +178,14 @@ export default async function MemberFolderPage({
 
       <StatusSummary counts={summary.byStatus} />
 
-      <Tabs defaultValue={activeTab} key={`${activeTab}-${statusFilter}`}>
+      <Tabs defaultValue={effectiveTab} key={`${effectiveTab}-${statusFilter}`}>
         <TabsList>
           <TabsTrigger value="list">Tarefas</TabsTrigger>
+          {supervised.length > 0 && (
+            <TabsTrigger value="supervised">
+              Supervisionadas ({supervised.length})
+            </TabsTrigger>
+          )}
           <TabsTrigger value="panel">Painel</TabsTrigger>
         </TabsList>
         <TabsContent value="list" className="mt-4 space-y-4">
@@ -182,6 +205,22 @@ export default async function MemberFolderPage({
             requiresDeleteApproval={needsDeleteApproval}
             approverName={approverName}
             initialStatusFilter={statusFilter}
+          />
+        </TabsContent>
+        <TabsContent value="supervised" className="mt-4 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Tarefas que {isOwnFolder ? "você acompanha" : `${folderName} acompanha`} como
+            supervisor. Não entram na lista de tarefas nem nos números da pasta.
+          </p>
+          <TaskTable
+            tasks={supervised}
+            members={members}
+            workspaceId={workspaceId}
+            subtasksByTask={supervisedSubtasks}
+            currentUserId={user.id}
+            isAdmin={role === "admin"}
+            requiresDeleteApproval={needsDeleteApproval}
+            approverName={approverName}
           />
         </TabsContent>
         <TabsContent value="panel" className="mt-4">

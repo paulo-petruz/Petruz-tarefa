@@ -47,7 +47,13 @@ export function TaskByPerson({
       key: String(member.UserId),
       name: member.Name,
       userId: member.UserId,
-      tasks: tasks.filter((t) => t.AssigneeId === member.UserId),
+      // Mesmo recorte da pasta: responsável OU colaborador. Supervisor não
+      // entra — a tarefa supervisionada não é carga de trabalho dele.
+      tasks: tasks.filter(
+        (t) =>
+          t.AssigneeId === member.UserId ||
+          t.Collaborators.some((c) => c.UserId === member.UserId)
+      ),
     }));
     const unassigned = tasks.filter((t) => t.AssigneeId === null);
     if (unassigned.length > 0) {

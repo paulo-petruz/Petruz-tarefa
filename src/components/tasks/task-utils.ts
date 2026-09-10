@@ -26,6 +26,7 @@ export function toFormValues(task: Task): TaskFormValues {
     progress: task.Progress,
     entry: task.Entry ?? null,
     collaboratorIds: task.Collaborators.map((c) => c.UserId),
+    supervisorIds: task.Supervisors.map((s) => s.UserId),
     metaType: task.MetaType,
     metaValue: task.MetaValue,
     standardMinutes:

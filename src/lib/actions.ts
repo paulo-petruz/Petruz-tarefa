@@ -463,6 +463,8 @@ const taskSchema = z
     entry: z.coerce.number().int().positive().optional(),
     // Usuários vinculados (compartilhamento) — só na tarefa-mãe.
     collaborators: z.array(z.coerce.number().int().positive()).optional(),
+    // Supervisores (acompanham sem executar) — só na tarefa-mãe.
+    supervisors: z.array(z.coerce.number().int().positive()).optional(),
     // Meta de subtarefas em aberto (teto/piso) — só na tarefa-mãe.
     metaType: z.enum(["teto", "piso"]).optional(),
     metaValue: z.coerce
@@ -501,6 +503,7 @@ function parseTaskForm(formData: FormData) {
     progress: formData.get("progress") || undefined,
     entry: formData.get("entry") || undefined,
     collaborators: formData.getAll("collaborators"),
+    supervisors: formData.getAll("supervisors"),
     metaType: parseMetaType(formData.get("metaType")),
     metaValue: formData.get("metaValue") || undefined,
     standardMinutes: formData.get("standardMinutes") || undefined,
@@ -521,6 +524,24 @@ async function resolveCollaborators(
     (await data.listWorkspaceMembers(workspaceId)).map((m) => m.UserId)
   );
   return Array.from(new Set(collaborators)).filter(
+    (id) => memberIds.has(id) && id !== assigneeId
+  );
+}
+
+/**
+ * Supervisores válidos: membros do espaço, sem duplicidade e sem o próprio
+ * responsável (supervisionar a própria tarefa anularia a separação).
+ */
+async function resolveSupervisors(
+  workspaceId: number,
+  assigneeId: number | null,
+  supervisors: number[] | undefined
+): Promise<number[]> {
+  if (!supervisors || supervisors.length === 0) return [];
+  const memberIds = new Set(
+    (await data.listWorkspaceMembers(workspaceId)).map((m) => m.UserId)
+  );
+  return Array.from(new Set(supervisors)).filter(
     (id) => memberIds.has(id) && id !== assigneeId
   );
 }
@@ -578,6 +599,12 @@ export async function createTaskAction(
         parsed.data.collaborators
       );
       await data.setTaskCollaborators(newTaskId, collaborators);
+      const supervisors = await resolveSupervisors(
+        parsed.data.workspaceId,
+        parsed.data.assigneeId ?? null,
+        parsed.data.supervisors
+      );
+      await data.setTaskSupervisors(newTaskId, supervisors);
     }
   } catch (err) {
     return {
@@ -640,6 +667,12 @@ export async function updateTaskAction(
         parsed.data.collaborators
       );
       await data.setTaskCollaborators(taskId, collaborators);
+      const supervisors = await resolveSupervisors(
+        task.WorkspaceId,
+        parsed.data.assigneeId ?? null,
+        parsed.data.supervisors
+      );
+      await data.setTaskSupervisors(taskId, supervisors);
     }
     revalidatePath(`/workspaces/${task.WorkspaceId}`);
   } catch (err) {
